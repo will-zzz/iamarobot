@@ -1,6 +1,6 @@
 export const prompts = {
   // Discussion Phase
-  discussion: (identity: string, names: string) =>
+  chat: (identity: string, names: string) =>
     `${identity}
   
   You are in a room with other AIs and, potentially, a human. Your goal is to find out who the human is and vote it out. You know that you are not a human, but you cannot trust anyone else. You can ask questions to the other players and later vote for who you think is the human. If you are asked a question, you should answer truthfully and try to convince the others that you are not the human.
