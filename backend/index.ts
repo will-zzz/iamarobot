@@ -96,15 +96,29 @@ app.post("/ai/chat", async (req: Request, res: Response) => {
 app.post("/ai/vote", async (req: Request, res: Response) => {});
 
 // Calculate votes. Godot calls this to calculate votes.
-// Passes gameId and vote strings (between 4 and 7)
+// Passes vote strings (between 4 and 7)
 app.post("/calculate-votes", async (req: Request, res: Response) => {
   try {
-    const gameId = req.body.gameId;
     const rawVotes = req.body.votes;
-    const votes: { [key: string]: number } = {};
-    await 
+    const completion = await openai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a helpful assistant designed to output JSON. Please provide the votes in the following format: { 'name1': 1, 'name2': 2, 'name3': 3 }.",
+        },
+        rawVotes,
+      ],
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+    });
+    if (!completion.choices[0].message.content) {
+      res.status(500).send("AI failed to respond");
+      return;
+    }
+    res.send(completion.choices[0].message.content);
   } catch (e) {
-    res.status;
+    res.status(500).send(e);
   }
 });
 
