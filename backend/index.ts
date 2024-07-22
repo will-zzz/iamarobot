@@ -3,6 +3,7 @@ import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import { prompts } from "./prompts";
 import prisma from "./prisma/client";
+import fs from "fs";
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -17,6 +18,7 @@ app.post("/start-game", async (req, res) => {
     const game = await prisma.game.create({
       data: {},
     });
+    const names = generateAIs();
     res.status(201).json({ gameId: game.id });
   } catch (error) {
     res.status(500).json({ error: "Failed to start game" });
@@ -38,6 +40,23 @@ app.post("/discussion", async (req: Request, res: Response) => {
   }
 });
 
+// Fetch AI names
+const generateAIs = () => {
+  const names = fs.readFileSync("./names.txt", "utf-8").split("\n");
+  const filteredNames = names.filter((name) => name.trim() !== "");
+  let randomNames: String[] = [];
+  for (let i = 0; i < 6; i++) {
+    const randomIndex = Math.floor(Math.random() * filteredNames.length);
+    if (!randomNames.includes(filteredNames[randomIndex])) {
+      randomNames.push(filteredNames[randomIndex].trim());
+    } else {
+      i--;
+    }
+  }
+  return randomNames;
+};
+
 app.listen(port, () => {
+  console.log(generateAIs());
   console.log(`[server]: Server is running at http://localhost:${port}`);
 });
