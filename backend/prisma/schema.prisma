@@ -25,6 +25,7 @@ model Message {
 model Player {
   id           Int       @id @default(autoincrement())
   name         String
+  identity     String
   gameId       Int
   game         Game      @relation(fields: [gameId], references: [id])
 }
