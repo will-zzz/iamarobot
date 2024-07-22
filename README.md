@@ -1,2 +1,7 @@
-# iamarobot
- Reverse Turing Test where you try to blend in with LLMs.
+# Tech Stack
+- Godot 4
+- OpenAI
+- Express.js
+- SQLite
+- Prisma
+- DigitalOcean
