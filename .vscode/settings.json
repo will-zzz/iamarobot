@@ -1,0 +1,10 @@
+{
+  "editor.wordWrap": "on",
+  "editor.wrappingStrategy": "advanced",
+  "[json]": {
+    "editor.wordWrap": "on",
+    "editor.quickSuggestions": {
+      "strings": true
+    }
+  }
+}

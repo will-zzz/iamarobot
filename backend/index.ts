@@ -1,23 +1,33 @@
 import OpenAI from "openai";
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
+import { prompts } from "./prompts";
+import prisma from "./prisma/client";
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const app = express();
-const port = process.env.PORT;
 app.use(express.json());
+const port = process.env.PORT;
 
-app.get("/", (req: Request, res: Response) => {
-  res.send("Express + TypeScript Server");
+// Start game. Godot calls this when player clicks "Start Game" button
+app.post("/start-game", async (req, res) => {
+  try {
+    const game = await prisma.game.create({
+      data: {},
+    });
+    res.status(201).json({ gameId: game.id });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to start game" });
+  }
 });
 
-app.post("/chat", async (req: Request, res: Response) => {
+app.post("/discussion", async (req: Request, res: Response) => {
   try {
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: "You are a helpful assistant." },
+        { role: "system", content: prompts.discussion("", "") },
         { role: "user", content: req.body.message },
       ],
       model: "gpt-4o-mini",
