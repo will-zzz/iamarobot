@@ -13,28 +13,78 @@ app.use(express.json());
 const port = process.env.PORT;
 
 // Start game. Godot calls this when player clicks "Start Game" button.
+// Pass user name
 app.post("/start-game", async (req, res) => {
   try {
     const game = await prisma.game.create({
       data: {},
     });
     const names = await generateAIs(game.id);
+    // Add user to the game
+    await prisma.player.create({
+      data: {
+        name: req.body.name,
+        identity: "You are the human",
+        gameId: game.id,
+      },
+    });
     res.status(201).json({ gameId: game.id, names: names });
   } catch (error) {
     res.status(500).json({ error: "Failed to start game" });
   }
 });
 
-// AI chat. Godot calls this when AI's turn to chat.
+// User chat. Godot calls this when user sends a message.
+// Passes gameId, user name, and message
 app.post("/chat", async (req: Request, res: Response) => {
   try {
+    await prisma.message.create({
+      data: {
+        content: `${req.body.name}: ${req.body.message}`,
+        gameId: req.body.gameId,
+      },
+    });
+    res.status(201).send("Message sent");
+  } catch (e) {
+    res.status(500).send(e);
+  }
+});
+
+// AI chat. Godot calls this when AI's turn to chat.
+// Passes gameId and aiId (for name + identity)
+app.post("/ai/chat", async (req: Request, res: Response) => {
+  try {
+    const aiId: number = req.body.aiId;
+    const player = await prisma.player.findUnique({
+      where: {
+        id: aiId,
+      },
+    });
+    if (!player) {
+      res.status(404).send("AI not found");
+      return;
+    }
+    const name = player.name;
+    const identity = player.identity;
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: prompts.chat("", "") },
+        { role: "system", content: prompts.chat(name, identity) },
         { role: "user", content: req.body.message },
       ],
       model: "gpt-4o-mini",
     });
+    if (!completion.choices[0].message.content) {
+      res.status(500).send("AI failed to respond");
+      return;
+    }
+    // Append AI's response to the chat log
+    await prisma.message.create({
+      data: {
+        content: `${name}: ${completion.choices[0].message.content}`,
+        gameId: req.body.gameId,
+      },
+    });
+    // Send the AI's response
     res.send(completion.choices[0].message.content);
   } catch (e) {
     res.status(500).send(e);
@@ -42,8 +92,20 @@ app.post("/chat", async (req: Request, res: Response) => {
 });
 
 // Vote. Godot calls this when player/AI's turn to vote.
-app.post("/vote", async (req: Request, res: Response) => {
-  res.status(500).send("Not implemented");
+// Passes gameId and aiId
+app.post("/ai/vote", async (req: Request, res: Response) => {});
+
+// Calculate votes. Godot calls this to calculate votes.
+// Passes gameId and vote strings (between 4 and 7)
+app.post("/calculate-votes", async (req: Request, res: Response) => {
+  try {
+    const gameId = req.body.gameId;
+    const rawVotes = req.body.votes;
+    const votes: { [key: string]: number } = {};
+    await 
+  } catch (e) {
+    res.status;
+  }
 });
 
 // Returns AI names. Generates identities for AIs.
