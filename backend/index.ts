@@ -93,7 +93,44 @@ app.post("/ai/chat", async (req: Request, res: Response) => {
 
 // Vote. Godot calls this when player/AI's turn to vote.
 // Passes gameId and aiId
-app.post("/ai/vote", async (req: Request, res: Response) => {});
+app.post("/ai/vote", async (req: Request, res: Response) => {
+  try {
+    const aiId: number = req.body.aiId;
+    const player = await prisma.player.findUnique({
+      where: {
+        id: aiId,
+      },
+    });
+    if (!player) {
+      res.status(404).send("AI not found");
+      return;
+    }
+    const name = player.name;
+    const identity = player.identity;
+    const completion = await openai.chat.completions.create({
+      messages: [
+        { role: "system", content: prompts.voting(name, identity) },
+        { role: "user", content: req.body.message },
+      ],
+      model: "gpt-4o-mini",
+    });
+    if (!completion.choices[0].message.content) {
+      res.status(500).send("AI failed to respond");
+      return;
+    }
+    // Append AI's response to the chat log
+    await prisma.message.create({
+      data: {
+        content: `${name}: ${completion.choices[0].message.content}`,
+        gameId: req.body.gameId,
+      },
+    });
+    // Send the AI's response
+    res.send(completion.choices[0].message.content);
+  } catch (e) {
+    res.status(500).send(e);
+  }
+});
 
 // Calculate votes. Godot calls this to calculate votes.
 // Passes vote strings (between 4 and 7)
