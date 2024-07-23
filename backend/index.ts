@@ -200,6 +200,7 @@ app.post("/calculate-votes", async (req: Request, res: Response) => {
   }
 });
 
+// Fetches conversation and formats it for OpenAI API
 const fetchConversation = async (gameId: number) => {
   // Fetch all messages for the game
   const messages = await prisma.message.findMany({
