@@ -74,18 +74,8 @@ app.post("/ai/chat", async (req: Request, res: Response) => {
     }
     const name = player.name;
     const identity = player.identity;
-    // Fetch all messages for the game
-    const messages = await prisma.message.findMany({
-      where: {
-        gameId: gameId,
-      },
-    });
-    // Format messages for AI
-    const formattedMessages: ChatCompletionMessageParam[] = messages.map(
-      (message) => {
-        return { role: "user", content: message.content };
-      }
-    );
+    // Fetch conversation for AI
+    const formattedMessages = await fetchConversation(gameId);
     const completion = await openai.chat.completions.create({
       messages: [
         { role: "system", content: prompts.chat(identity, "") },
@@ -131,10 +121,12 @@ app.post("/ai/vote", async (req: Request, res: Response) => {
     }
     const name = player.name;
     const identity = player.identity;
+    // Fetch conversation for AI
+    const formattedMessages = await fetchConversation(req.body.gameId);
     const completion = await openai.chat.completions.create({
       messages: [
         { role: "system", content: prompts.voting(identity, "") },
-        { role: "user", content: req.body.message },
+        ...formattedMessages,
       ],
       model: "gpt-4o-mini",
     });
@@ -142,15 +134,19 @@ app.post("/ai/vote", async (req: Request, res: Response) => {
       res.status(500).send("AI failed to respond");
       return;
     }
+    // First, check if sentence begins with "Word: ", and if so, remove it
+    let response = completion.choices[0].message.content;
+    // Remove "Name: " from the beginning of the sentence
+    response = response.replace(/^[^:]+:\s*/, "");
     // Append AI's response to the chat log
     await prisma.message.create({
       data: {
-        content: `${name}: ${completion.choices[0].message.content}`,
+        content: `${name}: ${response}`,
         gameId: req.body.gameId,
       },
     });
     // Send the AI's response
-    res.send(completion.choices[0].message.content);
+    res.send(response);
   } catch (e) {
     res.status(500).send(e);
   }
@@ -161,14 +157,19 @@ app.post("/ai/vote", async (req: Request, res: Response) => {
 app.post("/calculate-votes", async (req: Request, res: Response) => {
   try {
     const rawVotes = req.body.votes;
+    const formattedVotes: ChatCompletionMessageParam[] = rawVotes.map(
+      (vote: string) => {
+        return { role: "user", content: vote };
+      }
+    );
     const completion = await openai.chat.completions.create({
       messages: [
         {
           role: "system",
           content:
-            "You are a helpful assistant designed to output JSON. Please provide the votes in the following format: { 'name1': 1, 'name2': 2, 'name3': 3 }.",
+            "You are a helpful assistant designed to output JSON. Please provide the votes in the following format: { 'name': votes } where votes is the total number of votes against them. If a response only has a name, add a vote to it.",
         },
-        rawVotes,
+        ...formattedVotes,
       ],
       model: "gpt-4o-mini",
       response_format: { type: "json_object" },
@@ -182,6 +183,22 @@ app.post("/calculate-votes", async (req: Request, res: Response) => {
     res.status(500).send(e);
   }
 });
+
+const fetchConversation = async (gameId: number) => {
+  // Fetch all messages for the game
+  const messages = await prisma.message.findMany({
+    where: {
+      gameId: gameId,
+    },
+  });
+  // Format messages for AI
+  const formattedMessages: ChatCompletionMessageParam[] = messages.map(
+    (message) => {
+      return { role: "user", content: message.content };
+    }
+  );
+  return formattedMessages;
+};
 
 // Generates identities for AIs.
 const generateAIs = async (gameId: number) => {
