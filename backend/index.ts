@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { ChatCompletionMessageParam } from "openai/resources";
 import express, { Request, Response } from "express";
 import dotenv from "dotenv";
 import { prompts } from "./prompts";
@@ -19,7 +20,7 @@ app.post("/start-game", async (req, res) => {
     const game = await prisma.game.create({
       data: {},
     });
-    const names = await generateAIs(game.id);
+    await generateAIs(game.id);
     // Add user to the game
     await prisma.player.create({
       data: {
@@ -28,7 +29,13 @@ app.post("/start-game", async (req, res) => {
         gameId: game.id,
       },
     });
-    res.status(201).json({ gameId: game.id, names: names });
+    // Fetch every player in game
+    const players = await prisma.player.findMany({
+      where: {
+        gameId: game.id,
+      },
+    });
+    res.status(201).json({ gameId: game.id, players: players });
   } catch (error) {
     res.status(500).json({ error: "Failed to start game" });
   }
@@ -55,6 +62,7 @@ app.post("/chat", async (req: Request, res: Response) => {
 app.post("/ai/chat", async (req: Request, res: Response) => {
   try {
     const aiId: number = req.body.aiId;
+    const gameId: number = req.body.gameId;
     const player = await prisma.player.findUnique({
       where: {
         id: aiId,
@@ -66,10 +74,22 @@ app.post("/ai/chat", async (req: Request, res: Response) => {
     }
     const name = player.name;
     const identity = player.identity;
+    // Fetch all messages for the game
+    const messages = await prisma.message.findMany({
+      where: {
+        gameId: gameId,
+      },
+    });
+    // Format messages for AI
+    const formattedMessages: ChatCompletionMessageParam[] = messages.map(
+      (message) => {
+        return { role: "user", content: message.content };
+      }
+    );
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: prompts.chat(name, identity) },
-        { role: "user", content: req.body.message },
+        { role: "system", content: prompts.chat(identity, "") },
+        ...formattedMessages,
       ],
       model: "gpt-4o-mini",
     });
@@ -77,15 +97,19 @@ app.post("/ai/chat", async (req: Request, res: Response) => {
       res.status(500).send("AI failed to respond");
       return;
     }
+    // First, check if sentence begins with "Word: ", and if so, remove it
+    let response = completion.choices[0].message.content;
+    // Remove "Name: " from the beginning of the sentence
+    response = response.replace(/^[^:]+:\s*/, "");
     // Append AI's response to the chat log
     await prisma.message.create({
       data: {
-        content: `${name}: ${completion.choices[0].message.content}`,
+        content: `${name}: ${response}`,
         gameId: req.body.gameId,
       },
     });
     // Send the AI's response
-    res.send(completion.choices[0].message.content);
+    res.send(response);
   } catch (e) {
     res.status(500).send(e);
   }
@@ -109,7 +133,7 @@ app.post("/ai/vote", async (req: Request, res: Response) => {
     const identity = player.identity;
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: prompts.voting(name, identity) },
+        { role: "system", content: prompts.voting(identity, "") },
         { role: "user", content: req.body.message },
       ],
       model: "gpt-4o-mini",
@@ -159,7 +183,7 @@ app.post("/calculate-votes", async (req: Request, res: Response) => {
   }
 });
 
-// Returns AI names. Generates identities for AIs.
+// Generates identities for AIs.
 const generateAIs = async (gameId: number) => {
   const namesList = fs.readFileSync("./names.txt", "utf-8").split("\n");
   const filteredNames = namesList.filter((name) => name.trim() !== "");
@@ -205,7 +229,7 @@ const generateAIs = async (gameId: number) => {
       i--;
     }
   }
-  return names;
+  return;
 };
 
 app.listen(port, () => {
