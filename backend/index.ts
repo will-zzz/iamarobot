@@ -162,23 +162,39 @@ app.post("/calculate-votes", async (req: Request, res: Response) => {
         return { role: "user", content: vote };
       }
     );
-    const completion = await openai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a helpful assistant designed to output JSON. Please provide the votes in the following format: { 'name': votes } where votes is the total number of votes against them. If a response only has a name, add a vote to it.",
-        },
-        ...formattedVotes,
-      ],
-      model: "gpt-4o-mini",
-      response_format: { type: "json_object" },
+    // Call OpenAI API for every vote. Use Promise.all to wait for all responses.
+    const completions = await Promise.all(
+      formattedVotes.map((vote) =>
+        openai.chat.completions.create({
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a helpful assistant designed to output JSON. You should return an object with one key, 'name', which equals the name of the player being voted for.",
+            },
+            vote,
+          ],
+          model: "gpt-4o-mini",
+          response_format: { type: "json_object" },
+        })
+      )
+    ).then((completions) => {
+      return completions.map((completion) => {
+        return completion.choices[0].message.content
+          ? JSON.parse(completion.choices[0].message.content)
+          : { name: "" };
+      });
     });
-    if (!completion.choices[0].message.content) {
-      res.status(500).send("AI failed to respond");
-      return;
-    }
-    res.send(completion.choices[0].message.content);
+    // Count votes
+    const votes: { [key: string]: number } = {};
+    completions.forEach((vote) => {
+      if (votes[vote.name]) {
+        votes[vote.name]++;
+      } else {
+        votes[vote.name] = 1;
+      }
+    });
+    res.send(votes);
   } catch (e) {
     res.status(500).send(e);
   }
