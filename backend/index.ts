@@ -72,6 +72,11 @@ app.post("/ai/chat", async (req: Request, res: Response) => {
       res.status(404).send("AI not found");
       return;
     }
+    // Add check if ai id is not game id
+    if (player.gameId !== gameId) {
+      res.status(400).send("AI does not belong to this game");
+      return;
+    }
     const name = player.name;
     const identity = player.identity;
     // Fetch conversation for AI
