@@ -1,15 +1,45 @@
 extends Control
 
-var names = []
+@onready var http_request = HTTPRequest.new()
+@onready var player_container = $PlayerContainer
+var player_names = []
 
 func _ready():
-	if names.size() > 0:
-		display_people(names)
+	add_child(http_request)
+	http_request.request_completed.connect(_on_request_completed)
+	start_game()
 
-func set_names(names_array):
-	names = names_array
-	if is_inside_tree():
-		display_people(names)
+func start_game():
+	var url = "http://localhost:3000/start-game"
+	var headers = ["Content-Type: application/json"]
+	var body = JSON.stringify({"name": "Godot Connect"})
+	http_request.request(url, headers, HTTPClient.METHOD_POST, body)
+	
+func _on_request_completed(result, response_code, headers, body):
+	if response_code == 200 or response_code == 201:
+		var response_text = body.get_string_from_utf8()
+		var json = JSON.parse_string(response_text)
+		if json and "players" in json:
+			player_names = json["players"]
+			print("Received player data:", player_names)  # Debugging line
+			player_names.shuffle()  # Randomize order
+			display_players()
+		else:
+			print("Invalid JSON response")
+	else:
+		print("HTTP Request failed with code:", response_code)
 
-func display_people(names_array):
-	pass
+func display_players():
+	for player in player_names:
+		var player_name = player["name"] if player is Dictionary and "name" in player else str(player)
+
+		var player_cube = ColorRect.new()
+		player_cube.custom_minimum_size = Vector2(100, 100)
+		player_cube.color = Color(randf(), randf(), randf(), 1.0)  # Random colors
+
+		var label = Label.new()
+		label.text = player_name
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
+		player_cube.add_child(label)
+		player_container.add_child(player_cube)
