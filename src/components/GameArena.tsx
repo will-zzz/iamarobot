@@ -19,14 +19,13 @@ const sampleMessages = [
 
 const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
   const [gameId, setGameId] = useState<string | null>(null);
+  const [aiId, setAiId] = useState<string>("");
   const [participants, setParticipants] = useState<
     { name: string; isHuman: boolean }[]
   >([]);
 
   // Initial state with a sample message
-  const [currentSpeaker, setCurrentSpeaker] = useState(
-    Math.floor(Math.random() * 6)
-  );
+  const [currentSpeaker, setCurrentSpeaker] = useState(null);
   const [currentMessage, setCurrentMessage] = useState(sampleMessages[0]);
   const [userInput, setUserInput] = useState("");
 
@@ -78,6 +77,61 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
     setUserInput(e.target.value);
   };
 
+  const handleSubmit = async () => {
+    if (!gameId || !userInput.trim()) {
+      console.error("Game ID or message is missing.");
+      return;
+    }
+
+    try {
+      const response = await fetch("http://localhost:3000/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId,
+          name: playerName,
+          message: userInput,
+        }),
+      });
+
+      const result = await response.text();
+      console.log("Result: ", result);
+
+      // Clear the input field after submission
+      setUserInput("");
+    } catch (error) {
+      console.error("Error sending message:", error);
+    }
+  };
+
+  const handleAiChat = async () => {
+    if (!gameId || !aiId.trim()) {
+      console.error("Game ID or AI ID is missing.");
+      return;
+    }
+
+    try {
+      console.log("Sending AI Chat Request:", { gameId, aiId }); // Log the payload
+      const response = await fetch("http://localhost:3000/ai/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: Number(gameId),
+          aiId: Number(aiId),
+        }),
+      });
+
+      const result = await response.text();
+      console.log("AI Chat Result:", result);
+    } catch (error) {
+      console.error("Error during AI chat:", error);
+    }
+  };
+
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col min-h-[80vh] justify-between">
       <div className="flex justify-center mb-8 mt-4">
@@ -107,6 +161,29 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
           className="resize-none min-h-[60px] font-pixel text-xs bg-robot-dark border-2 border-robot-accent text-robot-light"
           style={{ minWidth: "100%" }}
         />
+        <button
+          onClick={handleSubmit}
+          className="mt-4 px-4 py-2 bg-robot-accent text-robot-dark font-bold rounded"
+        >
+          Submit
+        </button>
+
+        {/* AI Chat Section */}
+        <div className="mt-8 flex items-center gap-4">
+          <input
+            type="text"
+            value={aiId}
+            onChange={(e) => setAiId(e.target.value)}
+            placeholder="Enter AI ID"
+            className="px-4 py-2 border-2 border-robot-accent rounded bg-robot-dark text-robot-light"
+          />
+          <button
+            onClick={handleAiChat}
+            className="px-4 py-2 bg-robot-accent text-robot-dark font-bold rounded"
+          >
+            AI Chat
+          </button>
+        </div>
       </div>
     </div>
   );
