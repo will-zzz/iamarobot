@@ -7,26 +7,18 @@ interface GameArenaProps {
   playerName: string;
 }
 
-// Sample messages
-const sampleMessages = [
-  "Hello fellow humans! I am enjoying this activity.",
-  "I process... I mean, I feel emotions like happiness.",
-  "My favorite food is pizza because of its taste qualities.",
-  "I sleep 8 hours every night as humans should.",
-  "I enjoy watching sports competitions on weekends.",
-  "I am definitely not executing a program right now.",
-];
-
 const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
   const [gameId, setGameId] = useState<string | null>(null);
   const [aiId, setAiId] = useState<string>("");
   const [participants, setParticipants] = useState<
-    { name: string; isHuman: boolean }[]
+    {
+      id: number;
+      name: string;
+      isHuman: boolean;
+      isSpeaking: boolean;
+      message: string;
+    }[]
   >([]);
-
-  // Initial state with a sample message
-  const [currentSpeaker, setCurrentSpeaker] = useState(null);
-  const [currentMessage, setCurrentMessage] = useState(sampleMessages[0]);
   const [userInput, setUserInput] = useState("");
 
   // Function to start a new game
@@ -49,12 +41,15 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
         result.players.map(
           (player: {
             gameId: string;
-            id: string;
+            id: number;
             name: string;
             identity: string;
           }) => ({
+            id: player.id,
             name: player.name, // Extract the name property
             isHuman: player.name === playerName, // Check if the player is the human player
+            isSpeaking: false, // Initialize isSpeaking as false
+            message: "", // Initialize message as an empty string
           })
         )
       );
@@ -99,8 +94,28 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
       const result = await response.text();
       console.log("Result: ", result);
 
+      // Temporarily set the user's message and isSpeaking to true
+      setParticipants((prevParticipants) =>
+        prevParticipants.map((participant) =>
+          participant.isHuman
+            ? { ...participant, isSpeaking: true, message: userInput }
+            : participant
+        )
+      );
+
       // Clear the input field after submission
       setUserInput("");
+
+      // Reset isSpeaking and message after 5 seconds
+      setTimeout(() => {
+        setParticipants((prevParticipants) =>
+          prevParticipants.map((participant) =>
+            participant.isHuman
+              ? { ...participant, isSpeaking: false, message: "" }
+              : participant
+          )
+        );
+      }, 5000);
     } catch (error) {
       console.error("Error sending message:", error);
     }
@@ -127,6 +142,26 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
 
       const result = await response.text();
       console.log("AI Chat Result:", result);
+
+      // Temporarily set the AI's message and isSpeaking to true
+      setParticipants((prevParticipants) =>
+        prevParticipants.map((participant) =>
+          participant.id === Number(aiId)
+            ? { ...participant, isSpeaking: true, message: result }
+            : participant
+        )
+      );
+
+      // Reset isSpeaking and message after 5 seconds
+      setTimeout(() => {
+        setParticipants((prevParticipants) =>
+          prevParticipants.map((participant) => {
+            return participant.id === Number(aiId)
+              ? { ...participant, isSpeaking: false, message: "" }
+              : participant;
+          })
+        );
+      }, 5000);
     } catch (error) {
       console.error("Error during AI chat:", error);
     }
@@ -145,8 +180,8 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
               <Robot
                 name={participant.name}
                 isHuman={participant.isHuman}
-                isSpeaking={currentSpeaker === index}
-                message={currentSpeaker === index ? currentMessage : undefined}
+                isSpeaking={participant.isSpeaking} // Use participant's isSpeaking
+                message={participant.message} // Use participant's message
               />
             </div>
           ))}
@@ -157,6 +192,12 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
         <Textarea
           value={userInput}
           onChange={handleInputChange}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault(); // Prevent adding a new line
+              handleSubmit(); // Call the submit function
+            }
+          }}
           placeholder="Type your message here..."
           className="resize-none min-h-[60px] font-pixel text-xs bg-robot-dark border-2 border-robot-accent text-robot-light"
           style={{ minWidth: "100%" }}
