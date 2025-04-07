@@ -14,13 +14,15 @@ const Play = () => {
   
   return (
     <div className="min-h-screen flex flex-col p-4">
-      <header className="text-center mb-8">
+      <header className="text-center mb-4">
         <h1 className="text-2xl md:text-3xl text-robot-light">iamarobot</h1>
       </header>
       
-      <main className="flex-1 flex items-center justify-center">
+      <main className="flex-1 flex flex-col">
         {!gameStarted ? (
-          <NameInput onNameSubmit={handleNameSubmit} />
+          <div className="flex-1 flex items-center justify-center">
+            <NameInput onNameSubmit={handleNameSubmit} />
+          </div>
         ) : (
           <GameArena playerName={playerName || 'HUMAN'} />
         )}
