@@ -167,6 +167,52 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
     }
   };
 
+  const handleAiVote = async () => {
+    if (!gameId || !aiId.trim()) {
+      console.error("Game ID or AI ID is missing.");
+      return;
+    }
+
+    try {
+      console.log("Sending AI Vote Request:", { gameId, aiId }); // Log the payload
+      const response = await fetch("http://localhost:3000/ai/vote", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          gameId: Number(gameId),
+          aiId: Number(aiId),
+        }),
+      });
+
+      const result = await response.text();
+      console.log("AI Vote Result:", result);
+
+      // Temporarily set the AI's message and isSpeaking to true
+      setParticipants((prevParticipants) =>
+        prevParticipants.map((participant) =>
+          participant.id === Number(aiId)
+            ? { ...participant, isSpeaking: true, message: result }
+            : participant
+        )
+      );
+
+      // Reset isSpeaking and message after 5 seconds
+      setTimeout(() => {
+        setParticipants((prevParticipants) =>
+          prevParticipants.map((participant) => {
+            return participant.id === Number(aiId)
+              ? { ...participant, isSpeaking: false, message: "" }
+              : participant;
+          })
+        );
+      }, 5000);
+    } catch (error) {
+      console.error("Error during AI vote:", error);
+    }
+  };
+
   return (
     <div className="w-full max-w-4xl mx-auto flex flex-col min-h-[80vh] justify-between">
       <div className="flex justify-center mb-8 mt-4">
@@ -223,6 +269,12 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
             className="px-4 py-2 bg-robot-accent text-robot-dark font-bold rounded"
           >
             AI Chat
+          </button>
+          <button
+            onClick={handleAiVote}
+            className="px-4 py-2 bg-robot-accent text-robot-dark font-bold rounded"
+          >
+            AI Vote
           </button>
         </div>
       </div>
