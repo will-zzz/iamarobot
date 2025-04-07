@@ -2,12 +2,18 @@ extends Control
 
 @onready var http_request = HTTPRequest.new()
 @onready var player_container = $PlayerContainer
+@onready var text_input = $TextInput
 var player_names = []
+var current_turn = -1  # -1 means no one is chatting, 0 to 5 are player indices
+var turn_timer = 0
 
 func _ready():
 	add_child(http_request)
 	http_request.request_completed.connect(_on_request_completed)
 	start_game()
+
+	# Set the TextInput node for capturing human input
+	text_input.connect("text_entered", Callable(self, "_on_text_entered"))
 
 func start_game():
 	var url = "http://localhost:3000/start-game"
