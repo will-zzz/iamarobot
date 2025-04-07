@@ -5,12 +5,21 @@ import dotenv from "dotenv";
 import { prompts } from "./prompts";
 import prisma from "./prisma/client";
 import fs from "fs";
+import cors from "cors";
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const app = express();
 app.use(express.json());
+
+// Allow requests from localhost:8080
+app.use(
+  cors({
+    origin: "http://localhost:8080",
+  })
+);
+
 const port = process.env.PORT;
 
 // Start game. Godot calls this when player clicks "Start Game" button.
@@ -227,7 +236,7 @@ const generateAIs = async (gameId: number) => {
   const namesList = fs.readFileSync("./names.txt", "utf-8").split("\n");
   const filteredNames = namesList.filter((name) => name.trim() !== "");
   let names: String[] = [];
-  for (let i = 0; i < 6; i++) {
+  for (let i = 0; i < 5; i++) {
     const randomIndex = Math.floor(Math.random() * filteredNames.length);
     if (!names.includes(filteredNames[randomIndex])) {
       let name = filteredNames[randomIndex].trim();
