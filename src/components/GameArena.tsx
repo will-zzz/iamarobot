@@ -20,6 +20,7 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
     }[]
   >([]);
   const [userInput, setUserInput] = useState("");
+  const [currentTurn, setCurrentTurn] = useState<number | null>(null); // Track the current participant's turn
 
   // Function to start a new game
   const startGame = async () => {
@@ -63,6 +64,18 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
     startGame();
   }, []);
 
+  useEffect(() => {
+    if (participants.length > 0 && currentTurn === null) {
+      const randomParticipant =
+        participants[Math.floor(Math.random() * participants.length)];
+      setCurrentTurn(randomParticipant.id);
+
+      if (!randomParticipant.isHuman) {
+        handleAiChat(randomParticipant.id, gameId);
+      }
+    }
+  }, [gameId]);
+
   const handleTimeUp = () => {
     console.log("Time's up!");
     // Future game logic here
@@ -70,6 +83,17 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setUserInput(e.target.value);
+  };
+
+  const advanceTurn = () => {
+    const nextParticipant =
+      participants[Math.floor(Math.random() * participants.length)];
+    console.log("Participants (in advanceTurn):", participants);
+    setCurrentTurn(nextParticipant.id);
+
+    if (!nextParticipant.isHuman) {
+      handleAiChat(nextParticipant.id);
+    }
   };
 
   const handleSubmit = async () => {
@@ -106,6 +130,12 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
       // Clear the input field after submission
       setUserInput("");
 
+      // Wait for 2 seconds before proceeding
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Advance to the next turn
+      advanceTurn();
+
       // Reset isSpeaking and message after 5 seconds
       setTimeout(() => {
         setParticipants((prevParticipants) =>
@@ -121,21 +151,23 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
     }
   };
 
-  const handleAiChat = async () => {
-    if (!gameId || !aiId.trim()) {
-      console.error("Game ID or AI ID is missing.");
+  const handleAiChat = async (aiId: number, gameIdParam?: string) => {
+    const activeGameId = gameIdParam || gameId; // Use the passed gameId or fallback to state
+    console.log("Active Game ID:", activeGameId, "Participants:", participants);
+    if (!activeGameId) {
+      console.error("Game ID is missing.");
       return;
     }
 
     try {
-      console.log("Sending AI Chat Request:", { gameId, aiId }); // Log the payload
+      console.log("Sending AI Chat Request:", { activeGameId, aiId }); // Log the payload
       const response = await fetch("http://localhost:3000/ai/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          gameId: Number(gameId),
+          gameId: Number(activeGameId),
           aiId: Number(aiId),
         }),
       });
@@ -151,6 +183,12 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
             : participant
         )
       );
+
+      // Wait for 2 seconds before proceeding
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      // Advance to the next turn
+      advanceTurn();
 
       // Reset isSpeaking and message after 5 seconds
       setTimeout(() => {
@@ -229,6 +267,9 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
                 isSpeaking={participant.isSpeaking} // Use participant's isSpeaking
                 message={participant.message} // Use participant's message
               />
+              {currentTurn === participant.id && (
+                <div className="mt-2 text-robot-accent">⬆️</div> // Arrow to indicate the current turn
+              )}
             </div>
           ))}
         </div>
