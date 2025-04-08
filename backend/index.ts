@@ -124,6 +124,7 @@ app.post("/ai/chat", async (req: Request, res: Response) => {
 app.post("/ai/vote", async (req: Request, res: Response) => {
   try {
     const aiId: number = req.body.aiId;
+    console.log("AI ID:", aiId);
     const player = await prisma.player.findUnique({
       where: {
         id: aiId,
@@ -209,6 +210,31 @@ app.post("/calculate-votes", async (req: Request, res: Response) => {
       }
     });
     res.send(votes);
+  } catch (e) {
+    res.status(500).send(e);
+  }
+});
+
+// Moderator announces elimination. Godot calls this when a player is eliminated.
+// Passes gameId and player name
+app.post("/eliminate", async (req: Request, res: Response) => {
+  try {
+    const gameId: number = req.body.gameId;
+    const playerName: string = req.body.playerName;
+
+    // Create a moderator message announcing the elimination
+    const announcement = `MODERATOR: ${playerName} has been eliminated. Continue to search for the human!`;
+
+    // Append the announcement to the chat log
+    await prisma.message.create({
+      data: {
+        content: announcement,
+        gameId: gameId,
+      },
+    });
+
+    // Send the announcement back as a response
+    res.status(201).send(announcement);
   } catch (e) {
     res.status(500).send(e);
   }
