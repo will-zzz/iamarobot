@@ -34,7 +34,7 @@ app.post("/start-game", async (req, res) => {
     await prisma.player.create({
       data: {
         name: req.body.name,
-        identity: "You are the human",
+        identity: "",
         gameId: game.id,
       },
     });
@@ -67,7 +67,7 @@ app.post("/chat", async (req: Request, res: Response) => {
 });
 
 // AI chat. Godot calls this when AI's turn to chat.
-// Passes gameId and aiId (for name + identity)
+// Passes gameId and aiId (for name
 app.post("/ai/chat", async (req: Request, res: Response) => {
   try {
     const aiId: number = req.body.aiId;
@@ -87,12 +87,24 @@ app.post("/ai/chat", async (req: Request, res: Response) => {
       return;
     }
     const name = player.name;
-    const identity = player.identity;
+
+    // Fetch all players in the game
+    const allPlayers = await prisma.player.findMany({
+      where: {
+        gameId: gameId,
+      },
+    });
+    // Get names of all other players (excluding this AI)
+    const otherPlayerNames = allPlayers
+      .filter((p) => p.id !== aiId)
+      .map((p) => p.name)
+      .join(", ");
+
     // Fetch conversation for AI
     const formattedMessages = await fetchConversation(gameId);
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: prompts.chat(identity, "") },
+        { role: "system", content: prompts.chat(name, otherPlayerNames) },
         ...formattedMessages,
       ],
       model: "gpt-4o-mini",
@@ -135,12 +147,24 @@ app.post("/ai/vote", async (req: Request, res: Response) => {
       return;
     }
     const name = player.name;
-    const identity = player.identity;
+
+    // Fetch all players in the game
+    const allPlayers = await prisma.player.findMany({
+      where: {
+        gameId: req.body.gameId,
+      },
+    });
+    // Get names of all other players (excluding this AI)
+    const otherPlayerNames = allPlayers
+      .filter((p) => p.id !== aiId)
+      .map((p) => p.name)
+      .join(", ");
+
     // Fetch conversation for AI
     const formattedMessages = await fetchConversation(req.body.gameId);
     const completion = await openai.chat.completions.create({
       messages: [
-        { role: "system", content: prompts.voting(identity, "") },
+        { role: "system", content: prompts.voting(name, otherPlayerNames) },
         ...formattedMessages,
       ],
       model: "gpt-4o-mini",
@@ -267,35 +291,11 @@ const generateAIs = async (gameId: number) => {
     if (!names.includes(filteredNames[randomIndex])) {
       let name = filteredNames[randomIndex].trim();
       names.push(name);
-      // Generate AI identity from identities.txt
-      // It will have 3 identities from the file
-      let fullIdentity = "";
-      let identities: String[] = [];
-      const identitiesList = fs
-        .readFileSync("./identities.txt", "utf-8")
-        .split("\n");
-      const filteredIdentites = identitiesList.filter(
-        (identity) => identity.trim() !== ""
-      );
-      for (let j = 0; j < 3; j++) {
-        const randomIndex = Math.floor(
-          Math.random() * filteredIdentites.length
-        );
-        if (!identities.includes(filteredIdentites[randomIndex].trim())) {
-          let identity = filteredIdentites[randomIndex].trim();
-          identities.push(identity);
-          fullIdentity += `You ${identity} `;
-        } else {
-          j--;
-        }
-      }
-      // Remove last space
-      fullIdentity = fullIdentity.slice(0, -1);
       // Save AI to database
       await prisma.player.create({
         data: {
           name: name,
-          identity: fullIdentity,
+          identity: "",
           gameId: gameId,
         },
       });
@@ -305,6 +305,79 @@ const generateAIs = async (gameId: number) => {
   }
   return;
 };
+
+// Determine whose turn it is to talk based on chat history
+async function determineNextSpeaker(
+  gameId: number,
+  allPlayers: any[]
+): Promise<string> {
+  try {
+    // Fetch conversation history
+    const formattedMessages = await fetchConversation(gameId);
+    const playerNames = allPlayers.map((p) => p.name).join(", ");
+
+    // Add a final message to explicitly ask about the next speaker
+    formattedMessages.push({
+      role: "user",
+      content:
+        "Based on this conversation, who should speak next? Consider who was asked questions and who hasn't spoken recently.",
+    });
+
+    const completion = await openai.chat.completions.create({
+      messages: [
+        { role: "system", content: prompts.nextSpeaker(playerNames) },
+        ...formattedMessages,
+      ],
+      model: "gpt-4o-mini",
+      response_format: { type: "json_object" },
+    });
+
+    if (!completion.choices[0].message.content) {
+      throw new Error("AI failed to determine next speaker");
+    }
+
+    const response = JSON.parse(completion.choices[0].message.content);
+    return response.name;
+  } catch (error) {
+    console.error("Error determining next speaker:", error);
+    // If there's an error, pick a random player
+    const randomIndex = Math.floor(Math.random() * allPlayers.length);
+    return allPlayers[randomIndex].name;
+  }
+}
+
+// Get next speaker. Godot calls this to determine whose turn it is to speak.
+app.post("/next-speaker", async (req: Request, res: Response) => {
+  try {
+    const gameId: number = req.body.gameId;
+
+    // Fetch all players in the game
+    const allPlayers = await prisma.player.findMany({
+      where: {
+        gameId: gameId,
+      },
+    });
+
+    // Determine next speaker
+    const nextSpeaker = await determineNextSpeaker(gameId, allPlayers);
+
+    // Find the player object for the next speaker
+    const nextPlayer = allPlayers.find((p) => p.name === nextSpeaker);
+    if (!nextPlayer) {
+      res.status(404).send("Next speaker not found");
+      return;
+    }
+
+    console.log("nextSpeaker", nextSpeaker);
+
+    res.json({
+      nextSpeaker: nextPlayer.name,
+      nextSpeakerId: nextPlayer.id,
+    });
+  } catch (e) {
+    res.status(500).send(e);
+  }
+});
 
 app.listen(port, () => {
   console.log(`[server]: Server is running at http://localhost:${port}`);
