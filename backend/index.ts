@@ -6,46 +6,43 @@ import { prompts } from "./prompts";
 import prisma from "./prisma/client";
 import fs from "fs";
 import cors from "cors";
+import { createServer } from "http";
+import { GameEngine } from "./GameEngine";
+
 dotenv.config();
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const app = express();
+const server = createServer(app);
+
 app.use(express.json());
 
 // Allow requests from localhost:8080
 app.use(
   cors({
-    origin: "http://localhost:8080",
+    origin: [
+      "http://localhost:8080",
+      "http://127.0.0.1:5500",
+      "http://localhost:5500",
+    ],
+    credentials: true,
   })
 );
 
-const port = process.env.PORT;
+const port = process.env.PORT || 3000;
+
+// Initialize GameEngine with Socket.IO
+const gameEngine = new GameEngine(server, openai);
 
 // Start game. Godot calls this when player clicks "Start Game" button.
 // Pass user name
 app.post("/start-game", async (req, res) => {
   try {
-    const game = await prisma.game.create({
-      data: {},
-    });
-    await generateAIs(game.id);
-    // Add user to the game
-    await prisma.player.create({
-      data: {
-        name: req.body.name,
-        identity: "",
-        gameId: game.id,
-      },
-    });
-    // Fetch every player in game
-    const players = await prisma.player.findMany({
-      where: {
-        gameId: game.id,
-      },
-    });
-    res.status(201).json({ gameId: game.id, players: players });
+    const result = await gameEngine.startGame(req.body.name);
+    res.status(201).json(result);
   } catch (error) {
+    console.error("Error starting game:", error);
     res.status(500).json({ error: "Failed to start game" });
   }
 });
@@ -67,7 +64,7 @@ app.post("/chat", async (req: Request, res: Response) => {
 });
 
 // AI chat. Godot calls this when AI's turn to chat.
-// Passes gameId and aiId (for name
+// Passes gameId and aiId (for name + identity)
 app.post("/ai/chat", async (req: Request, res: Response) => {
   try {
     const aiId: number = req.body.aiId;
@@ -239,26 +236,32 @@ app.post("/calculate-votes", async (req: Request, res: Response) => {
   }
 });
 
-// Moderator announces elimination. Godot calls this when a player is eliminated.
-// Passes gameId and player name
-app.post("/eliminate", async (req: Request, res: Response) => {
+// Get next speaker. Godot calls this to determine whose turn it is to speak.
+app.post("/next-speaker", async (req: Request, res: Response) => {
   try {
     const gameId: number = req.body.gameId;
-    const playerName: string = req.body.playerName;
 
-    // Create a moderator message announcing the elimination
-    const announcement = `MODERATOR: ${playerName} has been eliminated. Continue to search for the human!`;
-
-    // Append the announcement to the chat log
-    await prisma.message.create({
-      data: {
-        content: announcement,
+    // Fetch all players in the game
+    const allPlayers = await prisma.player.findMany({
+      where: {
         gameId: gameId,
       },
     });
 
-    // Send the announcement back as a response
-    res.status(201).send(announcement);
+    // Determine next speaker
+    const nextSpeaker = await determineNextSpeaker(gameId, allPlayers);
+
+    // Find the player object for the next speaker
+    const nextPlayer = allPlayers.find((p) => p.name === nextSpeaker);
+    if (!nextPlayer) {
+      res.status(404).send("Next speaker not found");
+      return;
+    }
+
+    res.json({
+      nextSpeaker: nextPlayer.name,
+      nextSpeakerId: nextPlayer.id,
+    });
   } catch (e) {
     res.status(500).send(e);
   }
@@ -281,31 +284,6 @@ const fetchConversation = async (gameId: number) => {
   return formattedMessages;
 };
 
-// Generates identities for AIs.
-const generateAIs = async (gameId: number) => {
-  const namesList = fs.readFileSync("./names.txt", "utf-8").split("\n");
-  const filteredNames = namesList.filter((name) => name.trim() !== "");
-  let names: String[] = [];
-  for (let i = 0; i < 5; i++) {
-    const randomIndex = Math.floor(Math.random() * filteredNames.length);
-    if (!names.includes(filteredNames[randomIndex])) {
-      let name = filteredNames[randomIndex].trim();
-      names.push(name);
-      // Save AI to database
-      await prisma.player.create({
-        data: {
-          name: name,
-          identity: "",
-          gameId: gameId,
-        },
-      });
-    } else {
-      i--;
-    }
-  }
-  return;
-};
-
 // Determine whose turn it is to talk based on chat history
 async function determineNextSpeaker(
   gameId: number,
@@ -313,7 +291,22 @@ async function determineNextSpeaker(
 ): Promise<string> {
   try {
     // Fetch conversation history
-    const formattedMessages = await fetchConversation(gameId);
+    const messages = await prisma.message.findMany({
+      where: {
+        gameId: gameId,
+      },
+      orderBy: {
+        createdAt: "asc", // Get messages in chronological order
+      },
+      take: 10, // Get last 10 messages
+    });
+
+    // Format messages for AI
+    const formattedMessages: ChatCompletionMessageParam[] = messages.map(
+      (msg) => {
+        return { role: "user", content: msg.content };
+      }
+    );
     const playerNames = allPlayers.map((p) => p.name).join(", ");
 
     // Add a final message to explicitly ask about the next speaker
@@ -346,39 +339,6 @@ async function determineNextSpeaker(
   }
 }
 
-// Get next speaker. Godot calls this to determine whose turn it is to speak.
-app.post("/next-speaker", async (req: Request, res: Response) => {
-  try {
-    const gameId: number = req.body.gameId;
-
-    // Fetch all players in the game
-    const allPlayers = await prisma.player.findMany({
-      where: {
-        gameId: gameId,
-      },
-    });
-
-    // Determine next speaker
-    const nextSpeaker = await determineNextSpeaker(gameId, allPlayers);
-
-    // Find the player object for the next speaker
-    const nextPlayer = allPlayers.find((p) => p.name === nextSpeaker);
-    if (!nextPlayer) {
-      res.status(404).send("Next speaker not found");
-      return;
-    }
-
-    console.log("nextSpeaker", nextSpeaker);
-
-    res.json({
-      nextSpeaker: nextPlayer.name,
-      nextSpeakerId: nextPlayer.id,
-    });
-  } catch (e) {
-    res.status(500).send(e);
-  }
-});
-
-app.listen(port, () => {
-  console.log(`[server]: Server is running at http://localhost:${port}`);
+server.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });

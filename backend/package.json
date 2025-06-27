@@ -13,9 +13,11 @@
   "description": "",
   "dependencies": {
     "@prisma/client": "^5.17.0",
+    "@types/socket.io": "^3.0.2",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "openai": "^4.52.7"
+    "openai": "^4.52.7",
+    "socket.io": "^4.8.1"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
