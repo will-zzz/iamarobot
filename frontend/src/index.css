@@ -1,0 +1,88 @@
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
+
+    --card: 222 47% 15%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 142 76% 36%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 217 91% 60%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 215 16% 47%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 328 74% 70%;
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 16% 47%;
+    --input: 215 16% 47%;
+    --ring: 142 76% 36%;
+
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-robot-dark text-foreground font-pixel;
+  }
+  
+  /* Pixel-perfect CSS - disable anti-aliasing for crisp edges */
+  html {
+    -webkit-font-smoothing: none;
+    -moz-osx-font-smoothing: unset;
+  }
+
+  /* Custom scrollbar for the pixel theme */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: theme('colors.robot.dark');
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: theme('colors.robot.accent');
+    border: 2px solid theme('colors.robot.dark');
+  }
+}
+
+@layer utilities {
+  .speech-bubble {
+    @apply relative bg-robot-accent p-4 text-robot-dark rounded-sm;
+  }
+  
+  .speech-bubble::after {
+    content: '';
+    @apply absolute border-8 border-transparent border-t-robot-accent left-1/2 -translate-x-1/2 -bottom-4;
+  }
+  
+  .pixel-border {
+    box-shadow: 
+      0 0 0 2px theme('colors.robot.accent'),
+      0 0 0 4px theme('colors.robot.dark');
+  }
+}
