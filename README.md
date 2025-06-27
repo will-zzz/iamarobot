@@ -7,15 +7,6 @@ A monorepo containing both the backend and frontend for the "I Am A Robot" game.
 - `backend/` - Express.js backend with OpenAI integration
 - `frontend/` - React frontend built with Vite and TypeScript
 
-## Backend Tech Stack
-
-- Godot 4
-- OpenAI
-- Express.js
-- SQLite
-- Prisma
-- DigitalOcean
-
 ## Frontend Tech Stack
 
 - Vite
