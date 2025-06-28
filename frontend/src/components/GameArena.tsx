@@ -1,9 +1,8 @@
-
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Robot from "./Robot";
 import Timer from "./Timer";
 import { Textarea } from "./ui/textarea";
-import { useGameLogic } from "@/hooks/useGameLogic";
+import { useGameSocket } from "@/hooks/useGameSocket";
 
 interface GameArenaProps {
   playerName: string;
@@ -16,10 +15,18 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
     currentTurn,
     isVotingPhase,
     currentVoter,
-    handleUserMessage,
-    handleTimeUp,
-    userVoted,
-  } = useGameLogic({ playerName });
+    timeLeft,
+    isMyTurn,
+    isConnected,
+    error,
+    startGame,
+    sendMessage,
+  } = useGameSocket({ playerName });
+
+  // Start the game when component mounts
+  useEffect(() => {
+    startGame().catch(console.error);
+  }, [startGame]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setUserInput(e.target.value);
@@ -27,10 +34,39 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
 
   const handleSubmit = () => {
     if (!userInput.trim()) return;
-    
-    handleUserMessage(userInput);
+
+    sendMessage(userInput);
     setUserInput("");
   };
+
+  // Show loading state while connecting
+  if (!isConnected) {
+    return (
+      <div className="w-full max-w-4xl mx-auto flex flex-col min-h-[80vh] justify-center items-center">
+        <div className="text-2xl text-robot-accent">
+          Connecting to game server...
+        </div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (error) {
+    return (
+      <div className="w-full max-w-4xl mx-auto flex flex-col min-h-[80vh] justify-center items-center">
+        <div className="text-2xl text-red-500">Error: {error}</div>
+      </div>
+    );
+  }
+
+  // Show loading state while waiting for game state
+  if (participants.length === 0) {
+    return (
+      <div className="w-full max-w-4xl mx-auto flex flex-col min-h-[80vh] justify-center items-center">
+        <div className="text-2xl text-robot-accent">Starting game...</div>
+      </div>
+    );
+  }
 
   // In voting phase, highlight current voter, otherwise highlight current speaker
   const getHighlightedId = () => {
@@ -45,7 +81,7 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
             TIME TO VOTE
           </div>
         ) : (
-          <Timer initialSeconds={6} onTimeUp={handleTimeUp} />
+          <Timer initialSeconds={timeLeft} onTimeUp={() => {}} />
         )}
       </div>
 
@@ -56,8 +92,8 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
               <Robot
                 name={participant.name}
                 isHuman={participant.isHuman}
-                isSpeaking={participant.isSpeaking}
-                message={participant.message}
+                isSpeaking={participant.isSpeaking || false}
+                message={participant.message || ""}
               />
               {getHighlightedId() === participant.id && (
                 <div className="mt-2 text-robot-accent">⬆️</div>
@@ -77,18 +113,18 @@ const GameArena: React.FC<GameArenaProps> = ({ playerName }) => {
               handleSubmit(); // Call the submit function
             }
           }}
-          placeholder={isVotingPhase ? "Type your vote here..." : "Type your message here..."}
-          disabled={(isVotingPhase && userVoted) || 
-                   (isVotingPhase && currentVoter !== participants.find(p => p.isHuman)?.id) ||
-                   (!isVotingPhase && currentTurn !== participants.find(p => p.isHuman)?.id)}
+          placeholder={
+            isVotingPhase
+              ? "Type your vote here..."
+              : "Type your message here..."
+          }
+          disabled={!isMyTurn}
           className="resize-none min-h-[60px] font-pixel text-xs bg-robot-dark border-2 border-robot-accent text-robot-light"
           style={{ minWidth: "100%" }}
         />
         <button
           onClick={handleSubmit}
-          disabled={(isVotingPhase && userVoted) || 
-                   (isVotingPhase && currentVoter !== participants.find(p => p.isHuman)?.id) ||
-                   (!isVotingPhase && currentTurn !== participants.find(p => p.isHuman)?.id)}
+          disabled={!isMyTurn}
           className="mt-4 px-4 py-2 bg-robot-accent text-robot-dark font-bold rounded disabled:opacity-50"
         >
           Submit
