@@ -1,36 +1,60 @@
-
-import React, { useState } from 'react';
-import NameInput from '@/components/NameInput';
-import GameArena from '@/components/GameArena';
+import React, { useState } from "react";
+import NameInput from "@/components/NameInput";
+import GameArena from "@/components/GameArena";
 
 const Play = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
-  const [gameStarted, setGameStarted] = useState(false);
-  
-  const handleNameSubmit = (name: string) => {
-    setPlayerName(name);
-    setGameStarted(true);
+  const [gameId, setGameId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleNameSubmit = async (name: string) => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch("http://localhost:3000/start-game", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to start game");
+      }
+
+      const result = await response.json();
+      setGameId(result.gameId);
+      setPlayerName(name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start game");
+    } finally {
+      setIsLoading(false);
+    }
   };
-  
+
   return (
-    <div className="min-h-screen flex flex-col p-4">
-      <header className="text-center mb-4">
+    <div className="h-screen flex flex-col p-4 overflow-hidden">
+      <header className="text-center mb-4 flex-shrink-0">
         <h1 className="text-2xl md:text-3xl text-robot-light">iamarobot</h1>
       </header>
-      
-      <main className="flex-1 flex flex-col">
-        {!gameStarted ? (
+
+      <main className="flex-1 flex flex-col min-h-0">
+        {!gameId ? (
           <div className="flex-1 flex items-center justify-center">
-            <NameInput onNameSubmit={handleNameSubmit} />
+            {error && (
+              <div className="text-red-400 mb-4 text-center">
+                Error: {error}
+              </div>
+            )}
+            <NameInput onNameSubmit={handleNameSubmit} isLoading={isLoading} />
           </div>
         ) : (
-          <GameArena playerName={playerName || 'HUMAN'} />
+          <GameArena gameId={gameId} playerName={playerName || "HUMAN"} />
         )}
       </main>
-      
-      <footer className="mt-auto py-4 text-center text-robot-muted text-xs">
-        <p>FIND THE HUMAN • TRUST NO ONE</p>
-      </footer>
     </div>
   );
 };

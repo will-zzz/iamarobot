@@ -5,8 +5,7 @@ interface Player {
   id: number;
   name: string;
   isHuman: boolean;
-  isSpeaking?: boolean;
-  message?: string;
+  isEliminated?: boolean;
 }
 
 interface GameState {
@@ -15,71 +14,118 @@ interface GameState {
   currentTurn: number | null;
   isVotingPhase: boolean;
   currentVoter: number | null;
-  gamePhase: "waiting" | "chat" | "voting" | "ended";
+  gamePhase:
+    | "cutscene"
+    | "waiting"
+    | "chat"
+    | "voting"
+    | "elimination"
+    | "ended";
   timeLeft: number;
+  roundNumber: number;
+}
+
+interface Message {
+  playerId: number;
+  playerName: string;
+  message: string;
+  isHuman: boolean;
+}
+
+interface Vote {
+  playerId: number;
+  playerName: string;
+  vote: string;
+  isHuman: boolean;
 }
 
 interface UseGameSocketProps {
+  gameId: string;
   playerName: string;
 }
 
-export const useGameSocket = ({ playerName }: UseGameSocketProps) => {
+export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [gameId, setGameId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [votes, setVotes] = useState<Vote[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [cutsceneMessages, setCutsceneMessages] = useState<string[]>([]);
+  const [aiReactions, setAiReactions] = useState<
+    { playerId: number; playerName: string; reaction: string }[]
+  >([]);
+  const [eliminatedPlayer, setEliminatedPlayer] = useState<{
+    playerId: number;
+    playerName: string;
+    isHuman: boolean;
+    voteCounts: any;
+  } | null>(null);
+  const [gameEnded, setGameEnded] = useState<{
+    winner: string;
+    finalPlayers: Player[];
+  } | null>(null);
 
-  // Initialize socket connection
-  useEffect(() => {
+  const connect = useCallback(() => {
     const newSocket = io("http://localhost:3000");
-    setSocket(newSocket);
 
     newSocket.on("connect", () => {
+      console.log("Connected to server");
       setIsConnected(true);
-      setError(null);
-      console.log("Connected to game server");
+      newSocket.emit("join_game", { gameId, playerName });
     });
 
     newSocket.on("disconnect", () => {
+      console.log("Disconnected from server");
       setIsConnected(false);
-      console.log("Disconnected from game server");
     });
 
-    newSocket.on("error", (data) => {
-      setError(data.message);
-      console.error("Socket error:", data);
+    newSocket.on("game_state", (state: GameState) => {
+      console.log("Received game state:", state);
+      setGameState(state);
     });
 
-    return () => {
-      newSocket.close();
-    };
-  }, []);
-
-  // Socket event listeners
-  useEffect(() => {
-    if (!socket) return;
-
-    socket.on("game_state", (data: GameState) => {
-      console.log("Game state received:", data);
-      setGameState(data);
+    newSocket.on("cutscene_started", () => {
+      console.log("Cutscene started");
+      setCutsceneMessages([]);
+      setAiReactions([]);
     });
 
-    socket.on("chat_phase_started", (data) => {
-      console.log("Chat phase started:", data);
-      setGameState((prev) =>
-        prev
-          ? {
-              ...prev,
-              gamePhase: "chat",
-              currentTurn: data.currentTurn,
-              timeLeft: data.timeLeft,
-            }
-          : null
-      );
+    newSocket.on("moderator_message", (data: { message: string }) => {
+      console.log("Moderator message:", data.message);
+      setCutsceneMessages((prev) => [...prev, data.message]);
     });
 
-    socket.on("voting_phase_started", (data) => {
+    newSocket.on(
+      "ai_reaction",
+      (data: { playerId: number; playerName: string; reaction: string }) => {
+        console.log("AI reaction:", data);
+        setAiReactions((prev) => [...prev, data]);
+      }
+    );
+
+    newSocket.on(
+      "chat_phase_started",
+      (data: {
+        currentTurn: number;
+        timeLeft: number;
+        roundNumber: number;
+      }) => {
+        console.log("Chat phase started:", data);
+        setGameState((prev) =>
+          prev
+            ? {
+                ...prev,
+                gamePhase: "chat",
+                currentTurn: data.currentTurn,
+                timeLeft: data.timeLeft,
+                roundNumber: data.roundNumber,
+              }
+            : null
+        );
+      }
+    );
+
+    newSocket.on("voting_phase_started", (data: { currentVoter: number }) => {
       console.log("Voting phase started:", data);
       setGameState((prev) =>
         prev
@@ -91,22 +137,32 @@ export const useGameSocket = ({ playerName }: UseGameSocketProps) => {
             }
           : null
       );
+      setVotes([]);
     });
 
-    socket.on("turn_advanced", (data) => {
+    newSocket.on("message_sent", (data: Message) => {
+      console.log("Message sent:", data);
+      setMessages((prev) => [...prev, data]);
+    });
+
+    newSocket.on("vote_submitted", (data: Vote) => {
+      console.log("Vote submitted:", data);
+      setVotes((prev) => [...prev, data]);
+    });
+
+    newSocket.on("turn_advanced", (data: { currentTurn: number }) => {
       console.log("Turn advanced:", data);
       setGameState((prev) =>
         prev
           ? {
               ...prev,
               currentTurn: data.currentTurn,
-              timeLeft: data.timeLeft,
             }
           : null
       );
     });
 
-    socket.on("voter_advanced", (data) => {
+    newSocket.on("voter_advanced", (data: { currentVoter: number }) => {
       console.log("Voter advanced:", data);
       setGameState((prev) =>
         prev
@@ -118,85 +174,8 @@ export const useGameSocket = ({ playerName }: UseGameSocketProps) => {
       );
     });
 
-    socket.on("message_sent", (data) => {
-      console.log("Message sent:", data);
-      setGameState((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          players: prev.players.map((player) =>
-            player.id === data.playerId
-              ? { ...player, isSpeaking: true, message: data.message }
-              : player
-          ),
-        };
-      });
-    });
-
-    socket.on("message_cleared", (data) => {
-      console.log("Message cleared:", data);
-      setGameState((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          players: prev.players.map((player) =>
-            player.id === data.playerId
-              ? { ...player, isSpeaking: false, message: "" }
-              : player
-          ),
-        };
-      });
-    });
-
-    socket.on("vote_submitted", (data) => {
-      console.log("Vote submitted:", data);
-      setGameState((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          players: prev.players.map((player) =>
-            player.id === data.playerId
-              ? {
-                  ...player,
-                  isSpeaking: true,
-                  message: `I voted for ${data.vote}!`,
-                }
-              : player
-          ),
-        };
-      });
-    });
-
-    socket.on("vote_cleared", (data) => {
-      console.log("Vote cleared:", data);
-      setGameState((prev) => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          players: prev.players.map((player) =>
-            player.id === data.playerId
-              ? { ...player, isSpeaking: false, message: "" }
-              : player
-          ),
-        };
-      });
-    });
-
-    socket.on("voting_phase_ended", (data) => {
-      console.log("Voting phase ended:", data);
-      setGameState((prev) =>
-        prev
-          ? {
-              ...prev,
-              gamePhase: "chat",
-              isVotingPhase: false,
-              currentVoter: null,
-            }
-          : null
-      );
-    });
-
-    socket.on("time_update", (data) => {
+    newSocket.on("time_update", (data: { timeLeft: number }) => {
+      console.log("Time update:", data);
       setGameState((prev) =>
         prev
           ? {
@@ -206,98 +185,100 @@ export const useGameSocket = ({ playerName }: UseGameSocketProps) => {
           : null
       );
     });
-  }, [socket]);
 
-  // Start a new game
-  const startGame = useCallback(async () => {
-    try {
-      const response = await fetch("http://localhost:3000/start-game", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: playerName }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to start game");
+    newSocket.on(
+      "player_eliminated",
+      (data: {
+        playerId: number;
+        playerName: string;
+        isHuman: boolean;
+        voteCounts: any;
+      }) => {
+        console.log("Player eliminated:", data);
+        setEliminatedPlayer(data);
+        setGameState((prev) =>
+          prev
+            ? {
+                ...prev,
+                players: prev.players.map((p) =>
+                  p.id === data.playerId ? { ...p, isEliminated: true } : p
+                ),
+              }
+            : null
+        );
       }
+    );
 
-      const result = await response.json();
-      setGameId(result.gameId);
-
-      // Join the game via WebSocket
-      if (socket) {
-        socket.emit("join_game", {
-          gameId: result.gameId,
-          playerName: playerName,
-        });
+    newSocket.on(
+      "game_ended",
+      (data: { winner: string; finalPlayers: Player[] }) => {
+        console.log("Game ended:", data);
+        setGameEnded(data);
+        setGameState((prev) =>
+          prev
+            ? {
+                ...prev,
+                gamePhase: "ended",
+              }
+            : null
+        );
       }
+    );
 
-      return result;
-    } catch (error) {
-      console.error("Error starting game:", error);
-      setError("Failed to start game");
-      throw error;
-    }
-  }, [playerName, socket]);
+    newSocket.on("error", (data: { message: string }) => {
+      console.error("Socket error:", data.message);
+    });
 
-  // Send a message (chat or vote)
+    setSocket(newSocket);
+
+    return () => {
+      newSocket.close();
+    };
+  }, [gameId, playerName]);
+
   const sendMessage = useCallback(
     (message: string) => {
-      if (!socket || !gameId) {
-        console.error("Socket or gameId not available");
-        return;
-      }
-
-      if (gameState?.gamePhase === "voting") {
-        socket.emit("submit_vote", { gameId, vote: message });
-      } else {
+      if (socket && isConnected) {
         socket.emit("send_message", { gameId, message });
       }
     },
-    [socket, gameId, gameState?.gamePhase]
+    [socket, isConnected, gameId]
   );
 
-  // Check if it's the current player's turn
-  const isMyTurn = useCallback(() => {
-    if (!gameState) return false;
+  const submitVote = useCallback(
+    (vote: string) => {
+      if (socket && isConnected) {
+        socket.emit("submit_vote", { gameId, vote });
+      }
+    },
+    [socket, isConnected, gameId]
+  );
 
-    const currentPlayer = gameState.players.find((p) => p.isHuman);
-    if (!currentPlayer) return false;
+  useEffect(() => {
+    const cleanup = connect();
+    return cleanup;
+  }, [connect]);
 
-    if (gameState.gamePhase === "voting") {
-      return gameState.currentVoter === currentPlayer.id;
-    } else {
-      return gameState.currentTurn === currentPlayer.id;
+  // Clear eliminated player after 3 seconds
+  useEffect(() => {
+    if (eliminatedPlayer) {
+      const timer = setTimeout(() => {
+        setEliminatedPlayer(null);
+      }, 3000);
+      return () => clearTimeout(timer);
     }
-  }, [gameState]);
-
-  // Get current player info
-  const currentPlayer = gameState?.players.find((p) => p.isHuman);
+  }, [eliminatedPlayer]);
 
   return {
-    // State
     gameState,
-    gameId,
+    messages,
+    votes,
     isConnected,
-    error,
-
-    // Computed values
-    participants: gameState?.players || [],
-    currentTurn: gameState?.currentTurn || null,
-    isVotingPhase: gameState?.isVotingPhase || false,
-    currentVoter: gameState?.currentVoter || null,
-    timeLeft: gameState?.timeLeft || 0,
-    isMyTurn: isMyTurn(),
-
-    // Actions
-    startGame,
+    cutsceneMessages,
+    aiReactions,
+    eliminatedPlayer,
+    gameEnded,
     sendMessage,
-
-    // Legacy compatibility (for gradual migration)
-    handleUserMessage: sendMessage,
-    handleTimeUp: () => {}, // No longer needed - server handles timing
-    userVoted: false, // No longer needed - server tracks this
+    submitVote,
   };
 };
