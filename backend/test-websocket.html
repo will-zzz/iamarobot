@@ -1,0 +1,56 @@
+<!doctype html>
+<html>
+  <head>
+    <title>WebSocket Test</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h1>WebSocket Test Client</h1>
+    <div id="status">Connecting...</div>
+    <div id="messages"></div>
+
+    <script>
+      const socket = io("http://localhost:3000");
+
+      socket.on("connect", () => {
+        document.getElementById("status").textContent = "Connected!";
+        console.log("Connected to server");
+      });
+
+      socket.on("disconnect", () => {
+        document.getElementById("status").textContent = "Disconnected";
+        console.log("Disconnected from server");
+      });
+
+      socket.on("game_state", (data) => {
+        console.log("Game state received:", data);
+        document.getElementById("messages").innerHTML +=
+          "<p>Game state: " + JSON.stringify(data) + "</p>";
+      });
+
+      socket.on("chat_phase_started", (data) => {
+        console.log("Chat phase started:", data);
+        document.getElementById("messages").innerHTML +=
+          "<p>Chat phase started: " + JSON.stringify(data) + "</p>";
+      });
+
+      socket.on("message_sent", (data) => {
+        console.log("Message sent:", data);
+        document.getElementById("messages").innerHTML +=
+          "<p>Message: " + data.playerName + ": " + data.message + "</p>";
+      });
+
+      socket.on("error", (data) => {
+        console.log("Error:", data);
+        document.getElementById("messages").innerHTML +=
+          '<p style="color: red;">Error: ' + JSON.stringify(data) + "</p>";
+      });
+
+      // Test joining a game
+      setTimeout(() => {
+        console.log("Attempting to join game...");
+        socket.emit("join_game", { gameId: "395", playerName: "TestPlayer" });
+      }, 1000);
+    </script>
+  </body>
+</html>
