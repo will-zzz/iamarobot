@@ -1,41 +1,64 @@
-
-import React from 'react';
+import React from "react";
 
 interface RobotProps {
   name: string;
   isHuman: boolean;
-  isSpeaking: boolean;
-  message?: string;
+  isCurrentTurn?: boolean;
+  isCurrentVoter?: boolean;
+  isEliminated?: boolean;
 }
 
-const Robot: React.FC<RobotProps> = ({ name, isHuman, isSpeaking, message }) => {
+const Robot: React.FC<RobotProps> = ({
+  name,
+  isHuman,
+  isCurrentTurn = false,
+  isCurrentVoter = false,
+  isEliminated = false,
+}) => {
+  const getBorderColor = () => {
+    if (isEliminated) return "border-red-500 opacity-50";
+    if (isCurrentVoter) return "border-yellow-400";
+    if (isCurrentTurn) return "border-robot-accent";
+    return "border-robot-accent/50";
+  };
+
+  const getBackgroundColor = () => {
+    if (isEliminated) return "bg-red-900/20";
+    if (isCurrentVoter) return "bg-yellow-900/20";
+    if (isCurrentTurn) return "bg-robot-accent/20";
+    return "bg-robot-darker";
+  };
+
   return (
-    <div className="flex flex-col items-center w-[120px]">
-      {/* Speech bubble container with fixed height */}
-      <div className="min-h-[80px] flex items-end justify-center w-full mb-2">
-        {isSpeaking && message && (
-          <div className="speech-bubble text-xs px-2 py-1 min-h-[60px] w-[120px]">
-            {message}
-          </div>
+    <div
+      className={`flex flex-col items-center p-3 rounded-lg border-2 ${getBorderColor()} ${getBackgroundColor()} transition-all duration-300 min-w-[120px] max-w-[120px]`}
+    >
+      <div className="w-14 h-14 bg-robot-accent rounded-full flex items-center justify-center mb-2">
+        <span className="text-robot-dark text-xl">{isHuman ? "👤" : "🤖"}</span>
+      </div>
+
+      <div className="text-center">
+        <div
+          className={`font-bold text-sm ${isHuman ? "text-robot-accent" : "text-robot-light"}`}
+        >
+          {name}
+        </div>
+        <div className="text-xs text-robot-light/70">
+          {isHuman ? "Human" : "AI"}
+        </div>
+
+        {isEliminated && (
+          <div className="text-red-400 text-xs mt-1">ELIMINATED</div>
+        )}
+
+        {isCurrentTurn && !isEliminated && (
+          <div className="text-robot-accent text-xs mt-1">SPEAKING</div>
+        )}
+
+        {isCurrentVoter && !isEliminated && (
+          <div className="text-yellow-400 text-xs mt-1">VOTING</div>
         )}
       </div>
-      
-      <div className={`w-16 h-20 relative ${isHuman ? 'bg-robot-highlight' : 'bg-robot-accent'}`}>
-        {/* Robot head */}
-        <div className="absolute top-1 left-1 right-1 bottom-7 bg-robot-dark flex flex-col justify-center items-center">
-          {/* Eyes */}
-          <div className="flex justify-around w-full px-1">
-            <div className={`w-3 h-3 ${isHuman ? 'bg-robot-highlight' : 'bg-robot-accent'}`}></div>
-            <div className={`w-3 h-3 ${isHuman ? 'bg-robot-highlight' : 'bg-robot-accent'}`}></div>
-          </div>
-          {/* Mouth */}
-          <div className={`w-7 h-2 mt-2 ${isHuman ? 'bg-robot-highlight' : 'bg-robot-accent'}`}></div>
-        </div>
-        {/* Antenna */}
-        <div className={`absolute -top-3 left-1/2 transform -translate-x-1/2 w-2 h-3 ${isHuman ? 'bg-robot-highlight' : 'bg-robot-accent'}`}></div>
-      </div>
-      
-      <p className="text-center text-xs truncate w-full mt-2">{name}</p>
     </div>
   );
 };
