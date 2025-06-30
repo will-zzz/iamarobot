@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { useGameSocket } from "../hooks/useGameSocket";
 import Robot from "./Robot";
 import Timer from "./Timer";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "@/components/ui/toaster";
 
 interface GameArenaProps {
   gameId: string;
@@ -22,6 +24,7 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
     submitVote,
   } = useGameSocket({ gameId, playerName });
 
+  const { toast } = useToast();
   const [inputMessage, setInputMessage] = useState("");
   const [currentTypingMessage, setCurrentTypingMessage] = useState("");
   const [typingIndex, setTypingIndex] = useState(0);
@@ -54,6 +57,19 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, votes]);
+
+  // Show toast notification when someone is eliminated
+  useEffect(() => {
+    if (eliminatedPlayer) {
+      toast({
+        title: `${eliminatedPlayer.playerName} was eliminated!`,
+        description: eliminatedPlayer.isHuman
+          ? "The human has been caught!"
+          : "An AI has been eliminated!",
+        variant: eliminatedPlayer.isHuman ? "destructive" : "default",
+      });
+    }
+  }, [eliminatedPlayer, toast]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,6 +169,7 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
 
   return (
     <div className="h-full bg-robot-dark flex flex-col overflow-hidden">
+      <Toaster />
       {/* Header */}
       <div className="h-16 bg-robot-darker border-b-2 border-robot-accent px-4 flex items-center flex-shrink-0">
         <div className="flex justify-between items-center w-full">
@@ -240,24 +257,18 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
         </div>
       </div>
 
-      {/* Elimination Overlay */}
+      {/* Elimination Popup */}
       {eliminatedPlayer && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-robot-darker border-2 border-robot-accent p-8 rounded-lg text-center">
-            <h2 className="text-robot-light text-3xl mb-4">
-              {eliminatedPlayer.playerName} has been eliminated!
-            </h2>
-            <p className="text-robot-light text-xl mb-4">
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
+          <div className="bg-robot-darker border-2 border-robot-accent p-4 rounded-lg text-center shadow-lg">
+            <h3 className="text-robot-light text-lg font-bold mb-2">
+              {eliminatedPlayer.playerName} was eliminated!
+            </h3>
+            <p className="text-robot-accent text-sm">
               {eliminatedPlayer.isHuman
                 ? "The human has been caught!"
                 : "An AI has been eliminated!"}
             </p>
-            <div className="text-robot-accent text-lg">
-              Vote counts:{" "}
-              {Object.entries(eliminatedPlayer.voteCounts)
-                .map(([name, count]) => `${name}: ${count}`)
-                .join(", ")}
-            </div>
           </div>
         </div>
       )}

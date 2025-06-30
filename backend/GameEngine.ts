@@ -311,7 +311,7 @@ export class GameEngine {
     if (!game) return;
 
     game.gamePhase = "chat";
-    game.timeLeft = 60;
+    game.timeLeft = 10;
 
     // Select first player (randomly, but not the human)
     const activePlayers = game.players.filter((p) => !p.isEliminated);
@@ -409,11 +409,11 @@ export class GameEngine {
     } else {
       // All players have voted, process elimination
       console.log(`Game ${gameId}: All players voted, processing elimination`);
-      this.processElimination(gameId);
+      this.processElimination(gameId).catch(console.error);
     }
   }
 
-  private processElimination(gameId: string) {
+  private async processElimination(gameId: string) {
     const game = this.games.get(gameId);
     if (!game) return;
 
@@ -422,13 +422,113 @@ export class GameEngine {
       game.votingResponses
     );
 
-    // Count votes
+    try {
+      // Use the /calculate-votes endpoint to process votes
+      const response = await fetch(`http://localhost:3000/calculate-votes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ votes: game.votingResponses }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to calculate votes");
+      }
+
+      const voteCounts = await response.json();
+      console.log(`Game ${gameId}: Vote counts:`, voteCounts);
+
+      // Find player with most votes
+      let eliminatedPlayerName = "";
+      let maxVotes = 0;
+
+      Object.entries(voteCounts as { [key: string]: number }).forEach(
+        ([name, count]) => {
+          if (count > maxVotes) {
+            maxVotes = count;
+            eliminatedPlayerName = name;
+          }
+        }
+      );
+
+      console.log(
+        `Game ${gameId}: Eliminating player: ${eliminatedPlayerName} with ${maxVotes} votes`
+      );
+
+      // Find the eliminated player
+      const eliminatedPlayer = game.players.find(
+        (p) => p.name === eliminatedPlayerName
+      );
+      if (eliminatedPlayer) {
+        eliminatedPlayer.isEliminated = true;
+        game.eliminatedPlayers.push(eliminatedPlayer.id);
+
+        // Add moderator message to chat
+        await prisma.message.create({
+          data: {
+            content: `Moderator: ${eliminatedPlayer.name} has been eliminated. Continue to search for the human.`,
+            gameId: parseInt(gameId),
+          },
+        });
+
+        // Broadcast elimination event
+        this.io.to(gameId).emit("player_eliminated", {
+          playerId: eliminatedPlayer.id,
+          playerName: eliminatedPlayer.name,
+          isHuman: eliminatedPlayer.isHuman,
+          voteCounts,
+        });
+
+        // Check game end conditions
+        const activePlayers = game.players.filter((p) => !p.isEliminated);
+        const humanPlayer = activePlayers.find((p) => p.isHuman);
+
+        console.log(
+          `Game ${gameId}: After elimination. Active players: ${activePlayers.length}, Human alive: ${!!humanPlayer}`
+        );
+
+        if (!humanPlayer) {
+          // Human eliminated - AIs win
+          console.log(`Game ${gameId}: Human eliminated - AIs win`);
+          this.endGame(gameId, "ai_win");
+        } else if (activePlayers.length <= 2) {
+          // Only 2 players remain - Human wins
+          console.log(`Game ${gameId}: Only 2 players remain - Human wins`);
+          this.endGame(gameId, "human_win");
+        } else {
+          // Continue to next round
+          console.log(`Game ${gameId}: Continuing to next round`);
+          setTimeout(() => {
+            game.roundNumber++;
+            this.startChatPhase(gameId);
+          }, 3000);
+        }
+      } else {
+        console.error(
+          `Game ${gameId}: Could not find player to eliminate: ${eliminatedPlayerName}`
+        );
+      }
+    } catch (error) {
+      console.error(`Game ${gameId}: Error processing elimination:`, error);
+      // Fallback to simple vote counting if API fails
+      this.processEliminationFallback(gameId);
+    }
+  }
+
+  private processEliminationFallback(gameId: string) {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    console.log(`Game ${gameId}: Using fallback elimination processing`);
+
+    // Count votes manually as fallback
     const voteCounts: { [key: string]: number } = {};
     game.votingResponses.forEach((vote) => {
       voteCounts[vote] = (voteCounts[vote] || 0) + 1;
     });
 
-    console.log(`Game ${gameId}: Vote counts:`, voteCounts);
+    console.log(`Game ${gameId}: Fallback vote counts:`, voteCounts);
 
     // Find player with most votes
     let eliminatedPlayerName = "";
@@ -442,7 +542,7 @@ export class GameEngine {
     });
 
     console.log(
-      `Game ${gameId}: Eliminating player: ${eliminatedPlayerName} with ${maxVotes} votes`
+      `Game ${gameId}: Fallback eliminating player: ${eliminatedPlayerName} with ${maxVotes} votes`
     );
 
     // Find the eliminated player
@@ -453,6 +553,17 @@ export class GameEngine {
       eliminatedPlayer.isEliminated = true;
       game.eliminatedPlayers.push(eliminatedPlayer.id);
 
+      // Add moderator message to chat
+      prisma.message
+        .create({
+          data: {
+            content: `Moderator: ${eliminatedPlayer.name} has been eliminated. Continue to search for the human.`,
+            gameId: parseInt(gameId),
+          },
+        })
+        .catch(console.error);
+
+      // Broadcast elimination event
       this.io.to(gameId).emit("player_eliminated", {
         playerId: eliminatedPlayer.id,
         playerName: eliminatedPlayer.name,
@@ -464,30 +575,16 @@ export class GameEngine {
       const activePlayers = game.players.filter((p) => !p.isEliminated);
       const humanPlayer = activePlayers.find((p) => p.isHuman);
 
-      console.log(
-        `Game ${gameId}: After elimination. Active players: ${activePlayers.length}, Human alive: ${!!humanPlayer}`
-      );
-
       if (!humanPlayer) {
-        // Human eliminated - AIs win
-        console.log(`Game ${gameId}: Human eliminated - AIs win`);
         this.endGame(gameId, "ai_win");
       } else if (activePlayers.length <= 2) {
-        // Only 2 players remain - Human wins
-        console.log(`Game ${gameId}: Only 2 players remain - Human wins`);
         this.endGame(gameId, "human_win");
       } else {
-        // Continue to next round
-        console.log(`Game ${gameId}: Continuing to next round`);
         setTimeout(() => {
           game.roundNumber++;
           this.startChatPhase(gameId);
         }, 3000);
       }
-    } else {
-      console.error(
-        `Game ${gameId}: Could not find player to eliminate: ${eliminatedPlayerName}`
-      );
     }
   }
 
