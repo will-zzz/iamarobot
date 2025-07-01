@@ -16,42 +16,16 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
     messages,
     votes,
     isConnected,
-    cutsceneMessages,
-    aiReactions,
     eliminatedPlayer,
     gameEnded,
     sendMessage,
+    sendTypingEvent,
     submitVote,
   } = useGameSocket({ gameId, playerName });
 
   const { toast } = useToast();
   const [inputMessage, setInputMessage] = useState("");
-  const [currentTypingMessage, setCurrentTypingMessage] = useState("");
-  const [typingIndex, setTypingIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Typewriter effect for cutscene messages
-  useEffect(() => {
-    if (cutsceneMessages.length > 0 && typingIndex < cutsceneMessages.length) {
-      const message = cutsceneMessages[typingIndex];
-      let charIndex = 0;
-      setCurrentTypingMessage("");
-
-      const typeInterval = setInterval(() => {
-        if (charIndex < message.length) {
-          setCurrentTypingMessage((prev) => prev + message[charIndex]);
-          charIndex++;
-        } else {
-          clearInterval(typeInterval);
-          setTimeout(() => {
-            setTypingIndex((prev) => prev + 1);
-          }, 1000);
-        }
-      }, 50);
-
-      return () => clearInterval(typeInterval);
-    }
-  }, [cutsceneMessages, typingIndex]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
@@ -119,34 +93,6 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-robot-light text-xl">Loading game...</div>
-      </div>
-    );
-  }
-
-  // Cutscene phase
-  if (gameState.gamePhase === "cutscene") {
-    return (
-      <div className="h-screen bg-robot-dark flex flex-col overflow-hidden">
-        <div className="flex-1 flex items-center justify-center p-8 min-h-0">
-          <div className="max-w-4xl w-full">
-            <div className="bg-robot-darker border-2 border-robot-accent p-8 rounded-lg">
-              <div className="text-robot-light text-xl leading-relaxed mb-6">
-                {currentTypingMessage}
-                <span className="animate-pulse">|</span>
-              </div>
-
-              {aiReactions.length > 0 && (
-                <div className="space-y-2">
-                  {aiReactions.map((reaction, index) => (
-                    <div key={index} className="text-robot-accent text-lg">
-                      {reaction.playerName}: "{reaction.reaction}"
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
     );
   }
@@ -245,22 +191,35 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
               <input
                 type="text"
                 value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
+                onChange={(e) => {
+                  setInputMessage(e.target.value);
+                  // Emit typing event whenever human starts typing (first character) - only during chat phase
+                  if (
+                    e.target.value.length === 1 &&
+                    gameState.gamePhase === "chat"
+                  ) {
+                    sendTypingEvent();
+                  }
+                }}
                 placeholder={
                   gameState.gamePhase === "voting"
                     ? isMyTurn()
                       ? "Enter your vote..."
                       : "Waiting for your turn to vote..."
-                    : isMyTurn()
-                      ? "Type your message..."
-                      : "Waiting for your turn..."
+                    : "Type your message..."
                 }
-                disabled={!isMyTurn()}
+                disabled={
+                  gameState.gamePhase === "voting" ? !isMyTurn() : false
+                }
                 className="flex-1 bg-robot-dark border border-robot-accent text-robot-light px-3 py-2 rounded disabled:opacity-50 min-w-0"
               />
               <button
                 type="submit"
-                disabled={!isMyTurn() || !inputMessage.trim()}
+                disabled={
+                  gameState.gamePhase === "voting"
+                    ? !isMyTurn() || !inputMessage.trim()
+                    : !inputMessage.trim()
+                }
                 className="bg-robot-accent text-robot-dark px-4 py-2 rounded disabled:opacity-50 hover:bg-robot-accent/80 whitespace-nowrap"
               >
                 {gameState.gamePhase === "voting" ? "Vote" : "Send"}
