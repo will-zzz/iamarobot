@@ -311,7 +311,8 @@ export class GameEngine {
     if (!game) return;
 
     game.gamePhase = "chat";
-    game.timeLeft = 10;
+    game.isVotingPhase = false;
+    game.timeLeft = 30;
 
     // Select first player (randomly, but not the human)
     const activePlayers = game.players.filter((p) => !p.isEliminated);
@@ -472,6 +473,14 @@ export class GameEngine {
           },
         });
 
+        // Broadcast moderator message to chat
+        this.io.to(gameId).emit("message_sent", {
+          playerId: 0,
+          playerName: "Moderator",
+          message: `${eliminatedPlayer.name} has been eliminated. Continue to search for the human.`,
+          isHuman: false,
+        });
+
         // Broadcast elimination event
         this.io.to(gameId).emit("player_eliminated", {
           playerId: eliminatedPlayer.id,
@@ -562,6 +571,14 @@ export class GameEngine {
           },
         })
         .catch(console.error);
+
+      // Broadcast moderator message to chat
+      this.io.to(gameId).emit("message_sent", {
+        playerId: 0,
+        playerName: "Moderator",
+        message: `${eliminatedPlayer.name} has been eliminated. Continue to search for the human.`,
+        isHuman: false,
+      });
 
       // Broadcast elimination event
       this.io.to(gameId).emit("player_eliminated", {
@@ -656,7 +673,7 @@ export class GameEngine {
         }, 3500);
       }
     } catch (error) {
-      console.error("AI chat error:", error);
+      console.error(`Game ${gameId}: AI chat error:`, error);
       // Fallback: advance turn anyway
       setTimeout(() => {
         this.advanceTurn(gameId);

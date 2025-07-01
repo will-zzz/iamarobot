@@ -97,6 +97,16 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
 
   const currentPlayer = gameState?.players.find((p) => p.name === playerName);
 
+  // Debug: Log when messages change
+  useEffect(() => {
+    console.log(
+      "🎯 MESSAGES CHANGED - Length:",
+      messages.length,
+      "Messages:",
+      messages
+    );
+  }, [messages]);
+
   if (!isConnected) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -203,22 +213,25 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
         <div className="w-80 bg-robot-darker border-l-2 border-robot-accent p-4 flex flex-col flex-shrink-0 min-h-0">
           <div className="flex-1 overflow-y-auto mb-4 min-h-0">
             <div className="space-y-2">
-              {messages.map((msg, index) => (
-                <div key={index} className="bg-robot-dark p-3 rounded">
-                  <div className="text-robot-accent font-bold">
-                    {msg.playerName}
+              {[...messages, ...votes]
+                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+                .map((item, index) => (
+                  <div
+                    key={
+                      item.timestamp || `${item.playerId || "vote"}-${index}`
+                    }
+                    className={`bg-robot-dark p-3 rounded ${
+                      "vote" in item ? "border-l-4 border-robot-accent" : ""
+                    }`}
+                  >
+                    <div className="text-robot-accent font-bold">
+                      {item.playerName}
+                    </div>
+                    <div className="text-robot-light">
+                      {"message" in item ? item.message : item.vote}
+                    </div>
                   </div>
-                  <div className="text-robot-light">{msg.message}</div>
-                </div>
-              ))}
-              {votes.map((vote, index) => (
-                <div
-                  key={index}
-                  className="bg-robot-dark p-3 rounded border-l-4 border-robot-accent"
-                >
-                  <div className="text-robot-light">{vote.vote}</div>
-                </div>
-              ))}
+                ))}
             </div>
             <div ref={messagesEndRef} />
           </div>
@@ -256,22 +269,6 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
           )}
         </div>
       </div>
-
-      {/* Elimination Popup */}
-      {eliminatedPlayer && (
-        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-50">
-          <div className="bg-robot-darker border-2 border-robot-accent p-4 rounded-lg text-center shadow-lg">
-            <h3 className="text-robot-light text-lg font-bold mb-2">
-              {eliminatedPlayer.playerName} was eliminated!
-            </h3>
-            <p className="text-robot-accent text-sm">
-              {eliminatedPlayer.isHuman
-                ? "The human has been caught!"
-                : "An AI has been eliminated!"}
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

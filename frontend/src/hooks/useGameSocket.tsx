@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 
 interface Player {
@@ -30,6 +30,7 @@ interface Message {
   playerName: string;
   message: string;
   isHuman: boolean;
+  timestamp?: number;
 }
 
 interface Vote {
@@ -37,6 +38,7 @@ interface Vote {
   playerName: string;
   vote: string;
   isHuman: boolean;
+  timestamp?: number;
 }
 
 interface UseGameSocketProps {
@@ -65,17 +67,22 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
     finalPlayers: Player[];
   } | null>(null);
 
+  // Use ref to track connection state in closures
+  const connectionRef = useRef(false);
+
   const connect = useCallback(() => {
     const newSocket = io("http://localhost:3000");
 
     newSocket.on("connect", () => {
-      console.log("Connected to server");
+      console.log("🔌 CONNECTED to server");
+      connectionRef.current = true;
       setIsConnected(true);
       newSocket.emit("join_game", { gameId, playerName });
     });
 
     newSocket.on("disconnect", () => {
-      console.log("Disconnected from server");
+      console.log("🔌 DISCONNECTED from server");
+      connectionRef.current = false;
       setIsConnected(false);
     });
 
@@ -111,17 +118,19 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
         roundNumber: number;
       }) => {
         console.log("Chat phase started:", data);
-        setGameState((prev) =>
-          prev
+        setGameState((prev) => {
+          const newState = prev
             ? {
                 ...prev,
-                gamePhase: "chat",
+                gamePhase: "chat" as const,
+                isVotingPhase: false,
                 currentTurn: data.currentTurn,
                 timeLeft: data.timeLeft,
                 roundNumber: data.roundNumber,
               }
-            : null
-        );
+            : null;
+          return newState;
+        });
       }
     );
 
@@ -137,17 +146,28 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
             }
           : null
       );
-      setVotes([]);
     });
 
     newSocket.on("message_sent", (data: Message) => {
-      console.log("Message sent:", data);
-      setMessages((prev) => [...prev, data]);
+      console.log(
+        "📨 NEW MESSAGE:",
+        data.playerName,
+        ":",
+        data.message,
+        "(connected:",
+        connectionRef.current,
+        ")"
+      );
+      setMessages((prev) => {
+        const newMessages = [...prev, { ...data, timestamp: Date.now() }];
+        console.log("📊 Messages count:", prev.length, "→", newMessages.length);
+        return newMessages;
+      });
     });
 
     newSocket.on("vote_submitted", (data: Vote) => {
       console.log("Vote submitted:", data);
-      setVotes((prev) => [...prev, data]);
+      setVotes((prev) => [...prev, { ...data, timestamp: Date.now() }]);
     });
 
     newSocket.on("turn_advanced", (data: { currentTurn: number }) => {
@@ -175,7 +195,6 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
     });
 
     newSocket.on("time_update", (data: { timeLeft: number }) => {
-      console.log("Time update:", data);
       setGameState((prev) =>
         prev
           ? {
