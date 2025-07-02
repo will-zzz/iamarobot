@@ -212,6 +212,14 @@ export class GameEngine {
     // Record the vote
     game.votingResponses.push(vote);
 
+    // Save vote to database
+    await prisma.message.create({
+      data: {
+        content: `${player.name}: ${vote}`,
+        gameId: parseInt(gameId),
+      },
+    });
+
     // Broadcast vote to all players
     this.io.to(gameId).emit("vote_submitted", {
       playerId: player.id,
@@ -219,6 +227,9 @@ export class GameEngine {
       vote: `${player.name}: ${vote}`,
       isHuman: player.isHuman,
     });
+
+    // Immediately disable chatbox to prevent extra messages
+    this.io.to(gameId).emit("disable_chat");
 
     // Advance to next voter
     setTimeout(() => {
@@ -275,6 +286,9 @@ export class GameEngine {
       isEliminated: false,
     }));
 
+    // Shuffle players to randomize positions
+    this.shuffleArray(players);
+
     const gameState: GameState = {
       id: gameId,
       players,
@@ -308,7 +322,12 @@ export class GameEngine {
     game.gamePhase = "chat";
     game.isVotingPhase = false;
     game.currentVoter = null; // Clear voting state
-    game.timeLeft = 60; // 60 seconds for chat phase
+    game.timeLeft = 20; // 60 seconds for chat phase
+
+    // Emit voting phase ended event and updated game state to clear voting UI
+    this.io.to(gameId).emit("voting_phase_ended");
+    this.io.to(gameId).emit("enable_chat"); // Re-enable chatbox for new chat phase
+    this.io.to(gameId).emit("game_state", this.getPublicGameState(game));
 
     // Start turn timer
     this.startTurnTimer(gameId);
@@ -325,6 +344,9 @@ export class GameEngine {
     game.isVotingPhase = true;
     game.votingResponses = [];
 
+    // Clear the current turn to remove "SPEAKING" tag from chat phase
+    game.currentTurn = null;
+
     // Find first active player for voting
     const activePlayers = game.players.filter((p) => !p.isEliminated);
     game.currentVoter = activePlayers[0].id;
@@ -332,6 +354,9 @@ export class GameEngine {
     this.io.to(gameId).emit("voting_phase_started", {
       currentVoter: game.currentVoter,
     });
+
+    // Also emit updated game state to ensure frontend gets currentTurn = null
+    this.io.to(gameId).emit("game_state", this.getPublicGameState(game));
 
     // If first voter is AI, trigger AI vote
     if (!activePlayers[0].isHuman) {
@@ -514,6 +539,10 @@ export class GameEngine {
     const game = this.games.get(gameId);
     if (!game) return;
 
+    // Set game phase to elimination to prevent further input
+    game.gamePhase = "elimination";
+    this.io.to(gameId).emit("game_state", this.getPublicGameState(game));
+
     console.log(
       `Game ${gameId}: Processing elimination. Votes:`,
       game.votingResponses
@@ -624,6 +653,10 @@ export class GameEngine {
   private processEliminationFallback(gameId: string) {
     const game = this.games.get(gameId);
     if (!game) return;
+
+    // Set game phase to elimination to prevent further input
+    game.gamePhase = "elimination";
+    this.io.to(gameId).emit("game_state", this.getPublicGameState(game));
 
     console.log(`Game ${gameId}: Using fallback elimination processing`);
 
@@ -817,6 +850,14 @@ export class GameEngine {
         // Record the vote
         game.votingResponses.push(vote);
 
+        // Save AI vote to database
+        await prisma.message.create({
+          data: {
+            content: `${aiPlayer.name}: ${vote}`,
+            gameId: parseInt(gameId),
+          },
+        });
+
         // Broadcast AI vote
         this.io.to(gameId).emit("vote_submitted", {
           playerId: aiPlayer.id,
@@ -824,6 +865,9 @@ export class GameEngine {
           vote: `${aiPlayer.name}: ${vote}`,
           isHuman: false,
         });
+
+        // Immediately disable chatbox to prevent extra messages
+        this.io.to(gameId).emit("disable_chat");
 
         // Advance voter
         setTimeout(() => {
@@ -879,7 +923,11 @@ export class GameEngine {
         isHuman: p.isHuman,
         isEliminated: p.isEliminated || false,
       })),
-      currentTurn: game.currentTurn,
+      // During voting or elimination phase, don't send currentTurn to prevent "SPEAKING" styling
+      currentTurn:
+        game.isVotingPhase || game.gamePhase === "elimination"
+          ? null
+          : game.currentTurn,
       isVotingPhase: game.isVotingPhase,
       currentVoter: game.currentVoter,
       gamePhase: game.gamePhase,
@@ -1006,5 +1054,12 @@ export class GameEngine {
 
     // Trigger AI response
     this.handleAITurn(gameId);
+  }
+
+  private shuffleArray<T>(array: T[]): void {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
   }
 }
