@@ -37,9 +37,7 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
     if (eliminatedPlayer) {
       toast({
         title: `${eliminatedPlayer.playerName} was eliminated!`,
-        description: eliminatedPlayer.isHuman
-          ? "The human has been caught!"
-          : "An AI has been eliminated!",
+        description: eliminatedPlayer.isHuman ? "Game over!" : null,
         variant: eliminatedPlayer.isHuman ? "destructive" : "default",
       });
     }
@@ -140,8 +138,8 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Robots Section */}
-        <div className="flex-1 p-4 flex items-end justify-center min-w-0">
-          <div className="flex justify-center items-end space-x-3 w-full max-w-full">
+        <div className="flex-1 p-6 flex items-center justify-center min-w-0 ">
+          <div className="grid grid-cols-3 auto-rows-fr gap-6 w-full h-full">
             {gameState.players.map((player) => (
               <Robot
                 key={player.id}
@@ -156,9 +154,9 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
         </div>
 
         {/* Chat/Voting Section */}
-        <div className="w-80 bg-robot-darker border-l-2 border-robot-accent p-4 flex flex-col flex-shrink-0 min-h-0">
+        <div className="w-[28rem] bg-robot-darker border-l-2 border-robot-accent p-6 flex flex-col flex-shrink-0 min-h-0">
           <div className="flex-1 overflow-y-auto mb-4 min-h-0">
-            <div className="space-y-2">
+            <div className="space-y-3">
               {[...messages, ...votes]
                 .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
                 .map((item, index) => (

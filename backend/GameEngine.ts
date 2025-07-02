@@ -471,8 +471,18 @@ export class GameEngine {
 
     for (const player of players) {
       const nameLower = player.name.toLowerCase();
+
+      // Check if message contains the full name
       if (messageLower.includes(nameLower)) {
         return player;
+      }
+
+      // Check if message contains a word that matches the beginning of the player's name
+      const nameWords = nameLower.split(" ");
+      for (const word of nameWords) {
+        if (word.length > 0 && messageLower.includes(word)) {
+          return player;
+        }
       }
     }
 
