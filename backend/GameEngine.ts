@@ -160,6 +160,11 @@ export class GameEngine {
 
     // Clear typing flag when human sends message
     if (player.isHuman) {
+      if (game.humanIsTyping) {
+        console.log(
+          `⌨️ Game ${gameId}: Human finished typing, clearing typing flag`
+        );
+      }
       game.humanIsTyping = false;
     }
 
@@ -303,7 +308,7 @@ export class GameEngine {
     game.gamePhase = "chat";
     game.isVotingPhase = false;
     game.currentVoter = null; // Clear voting state
-    game.timeLeft = 20; // 60 seconds for chat phase
+    game.timeLeft = 60; // 60 seconds for chat phase
 
     // Start turn timer
     this.startTurnTimer(gameId);
@@ -338,6 +343,12 @@ export class GameEngine {
     const game = this.games.get(gameId);
     if (!game || game.gamePhase !== "chat") return;
 
+    // CRITICAL FIX: If human is actively typing, don't advance turn
+    if (game.humanIsTyping) {
+      console.log(`⏳ Game ${gameId}: Human is typing, not advancing turn`);
+      return;
+    }
+
     const activePlayers = game.players.filter((p) => !p.isEliminated);
     const nextPlayer = this.determineNextSpeaker(gameId, activePlayers);
 
@@ -346,12 +357,6 @@ export class GameEngine {
       console.log(
         `⏳ Game ${gameId}: No name mentioned, waiting for human input or 3-second timeout`
       );
-
-      // Don't set timeout if human is actively typing
-      if (game.humanIsTyping) {
-        console.log(`⏳ Game ${gameId}: Human is typing, skipping timeout`);
-        return;
-      }
 
       // Clear any existing timeout
       if (game.humanTimeoutId) {
