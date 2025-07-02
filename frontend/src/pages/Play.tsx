@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { Link } from "react-router-dom";
 import NameInput from "@/components/NameInput";
 import GameArena from "@/components/GameArena";
 
@@ -38,7 +39,11 @@ const Play = () => {
   return (
     <div className="h-screen flex flex-col p-4 overflow-hidden">
       <header className="text-center mb-4 flex-shrink-0">
-        <h1 className="text-2xl md:text-3xl text-robot-light">iamarobot</h1>
+        <Link to="/" className="hover:opacity-80 transition-opacity">
+          <h1 className="text-2xl md:text-3xl text-robot-light cursor-pointer">
+            iamarobot
+          </h1>
+        </Link>
       </header>
 
       <main className="flex-1 flex flex-col min-h-0">

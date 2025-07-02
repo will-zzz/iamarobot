@@ -322,7 +322,7 @@ export class GameEngine {
     game.gamePhase = "chat";
     game.isVotingPhase = false;
     game.currentVoter = null; // Clear voting state
-    game.timeLeft = 20; // 60 seconds for chat phase
+    game.timeLeft = 60; // 60 seconds for chat phase
 
     // Emit voting phase ended event and updated game state to clear voting UI
     this.io.to(gameId).emit("voting_phase_ended");

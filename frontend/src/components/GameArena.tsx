@@ -1,9 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useGameSocket } from "../hooks/useGameSocket";
 import Robot from "./Robot";
 import Timer from "./Timer";
 import { useToast } from "@/hooks/use-toast";
 import { Toaster } from "@/components/ui/toaster";
+import { Button } from "@/components/ui/button";
 
 interface GameArenaProps {
   gameId: string;
@@ -110,10 +112,16 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
                   ? "The human successfully survived and won the game!"
                   : "The AIs successfully identified and eliminated the human!"}
               </p>
-              <div className="text-robot-accent text-lg">
+              <div className="text-robot-accent text-lg mb-8">
                 Final survivors:{" "}
                 {gameEnded.finalPlayers.map((p) => p.name).join(", ")}
               </div>
+              <Button
+                onClick={() => window.location.reload()}
+                className="bg-robot-highlight text-robot-dark hover:bg-robot-highlight/80 text-lg px-8 py-4"
+              >
+                Play Again
+              </Button>
             </div>
           </div>
         </div>
