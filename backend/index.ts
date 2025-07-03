@@ -23,13 +23,15 @@ app.get("/", (req: Request, res: Response) => {
   res.send("Beep boop. I am a robot.");
 });
 
-// Allow requests from localhost:3000
+// Allow requests from frontend domains
 app.use(
   cors({
     origin: [
       "http://localhost:3000",
       "http://127.0.0.1:5500",
       "http://localhost:5500",
+      "https://iamarobot.net",
+      "https://www.iamarobot.net",
     ],
     credentials: true,
   })
