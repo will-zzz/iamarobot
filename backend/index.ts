@@ -18,6 +18,11 @@ const server = createServer(app);
 
 app.use(express.json());
 
+// Root route - simple greeting
+app.get("/", (req: Request, res: Response) => {
+  res.send("Beep boop. I am a robot.");
+});
+
 // Allow requests from localhost:3000
 app.use(
   cors({
