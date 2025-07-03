@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
-const Index = () => {
+const About = () => {
   return (
     <div className="min-h-screen flex flex-col px-4 py-8">
       {/* Navigation Header */}
@@ -14,10 +14,7 @@ const Index = () => {
           >
             Home
           </Link>
-          <Link
-            to="/about"
-            className="text-robot-muted hover:text-robot-light transition-colors"
-          >
+          <Link to="/about" className="text-robot-light transition-colors">
             About
           </Link>
           <Link
@@ -35,30 +32,70 @@ const Index = () => {
         </nav>
       </header>
 
-      <div className="flex flex-col items-center justify-center flex-1">
-        <Link to="/" className="hover:opacity-80 transition-opacity">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl text-robot-light mb-2 animate-pulse cursor-pointer">
-            iamarobot
-          </h1>
-        </Link>
-        <p className="text-robot-muted text-sm md:text-base mb-12 max-w-md text-center">
-          One human. Five AIs.
-          <br />
-          Blend in and survive.
-        </p>
+      <div className="flex flex-col items-center justify-center flex-1 max-w-4xl mx-auto">
+        <h1 className="text-4xl md:text-5xl text-robot-light mb-8 text-center">
+          About iamarobot
+        </h1>
 
-        <div className="relative">
-          <span className="absolute -left-6 -top-6 text-robot-accent animate-blink">
-            {">"}
-          </span>
+        <div className="space-y-8 text-robot-light">
+          <div className="bg-robot-darker border-2 border-robot-accent p-6 rounded-lg">
+            <h2 className="text-2xl text-robot-accent mb-4">The Game</h2>
+            <p className="text-lg leading-relaxed">
+              iamarobot is a{" "}
+              <a
+                href="https://en.wikipedia.org/wiki/Reverse_Turing_test"
+                className="text-robot-accent hover:underline"
+                target="_blank"
+              >
+                reverse Turing test
+              </a>{" "}
+              where the human player tries to blend in among five AIs. As
+              opposed to a traditional{" "}
+              <a
+                href="https://en.wikipedia.org/wiki/Turing_test"
+                className="text-robot-accent hover:underline"
+                target="_blank"
+              >
+                Turing test,
+              </a>{" "}
+              the human is the one trying to imitate an AI and "passes" if they
+              go undetected.
+            </p>
+          </div>
+
+          <div className="bg-robot-darker border-2 border-robot-accent p-6 rounded-lg">
+            <h2 className="text-2xl text-robot-accent mb-4">Inspiration</h2>
+            <p className="text-lg leading-relaxed">
+              When I saw{" "}
+              <a
+                href="https://www.youtube.com/watch?v=MxTWLm9vT_o"
+                className="text-robot-accent hover:underline"
+                target="_blank"
+              >
+                this video
+              </a>{" "}
+              by Tamulur, I thought it was a great idea and wanted to try it
+              myself. But as the simulation was not made public and I couldn't
+              find any others, I decided to build iamarobot.
+            </p>
+          </div>
+
+          <div className="bg-robot-darker border-2 border-robot-accent p-6 rounded-lg">
+            <h2 className="text-2xl text-robot-accent mb-4">Development</h2>
+            <p className="text-lg leading-relaxed">
+              This is an experimental project. I'm open to further iterating on
+              the idea, as I believe this only scratches the surface of the
+              concept.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-12">
           <Link to="/play">
-            <Button className="bg-robot-highlight text-robot-dark hover:bg-robot-highlight/80 text-lg md:text-xl px-8 py-6">
-              PLAY
+            <Button className="bg-robot-highlight text-robot-dark hover:bg-robot-highlight/80 text-lg px-8 py-4">
+              Play Now
             </Button>
           </Link>
-          <span className="absolute -right-6 -bottom-6 text-robot-accent animate-blink">
-            {"<"}
-          </span>
         </div>
       </div>
 
@@ -101,4 +138,4 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default About;

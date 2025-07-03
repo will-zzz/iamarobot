@@ -2,7 +2,7 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
-const Index = () => {
+const HowToPlay = () => {
   return (
     <div className="min-h-screen flex flex-col px-4 py-8">
       {/* Navigation Header */}
@@ -22,7 +22,7 @@ const Index = () => {
           </Link>
           <Link
             to="/how-to-play"
-            className="text-robot-muted hover:text-robot-light transition-colors"
+            className="text-robot-light transition-colors"
           >
             How to Play
           </Link>
@@ -35,30 +35,88 @@ const Index = () => {
         </nav>
       </header>
 
-      <div className="flex flex-col items-center justify-center flex-1">
-        <Link to="/" className="hover:opacity-80 transition-opacity">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl text-robot-light mb-2 animate-pulse cursor-pointer">
-            iamarobot
-          </h1>
-        </Link>
-        <p className="text-robot-muted text-sm md:text-base mb-12 max-w-md text-center">
-          One human. Five AIs.
-          <br />
-          Blend in and survive.
-        </p>
+      <div className="flex flex-col items-center justify-center flex-1 max-w-4xl mx-auto">
+        <h1 className="text-4xl md:text-5xl text-robot-light mb-8 text-center">
+          How to Play
+        </h1>
 
-        <div className="relative">
-          <span className="absolute -left-6 -top-6 text-robot-accent animate-blink">
-            {">"}
-          </span>
+        <div className="space-y-8 text-robot-light">
+          <div className="bg-robot-darker border-2 border-robot-accent p-6 rounded-lg">
+            <h2 className="text-2xl text-robot-accent mb-4">Game Setup</h2>
+            <p className="text-lg leading-relaxed mb-4">
+              Each game consists of 6 players: You (the human, I hope) and five
+              AIs.
+            </p>
+            <p className="text-lg leading-relaxed mb-4">
+              Your goal is to convince the robots that you're one of them, by
+              any means necessary. Distract them, frame them, gaslight them, and
+              most importantly, use your human ingenuity to defeat them.
+            </p>
+          </div>
+
+          <div className="bg-robot-darker border-2 border-robot-accent p-6 rounded-lg">
+            <h2 className="text-2xl text-robot-accent mb-4">Chat Phase</h2>
+            <p className="text-lg leading-relaxed mb-4">
+              Players take turns speaking in a group chat.
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-lg">
+              <li>When it's your turn, you can type and send a message</li>
+              <li>
+                If you mention another player's name, they get the next turn
+              </li>
+              <li>
+                If you don't mention anyone, the turn passes to a random player
+              </li>
+            </ul>
+          </div>
+
+          <div className="bg-robot-darker border-2 border-robot-accent p-6 rounded-lg">
+            <h2 className="text-2xl text-robot-accent mb-4">Voting Phase</h2>
+            <p className="text-lg leading-relaxed mb-4">
+              After the chat phase, players vote to eliminate one player from
+              the game.
+            </p>
+            <ul className="list-disc list-inside space-y-2 text-lg">
+              <li>Players vote one at a time in a specific order</li>
+              <li>
+                Type the name (proper spelling!) of the player you want to
+                eliminate
+              </li>
+              <li>The player with the most votes is eliminated</li>
+              <li>
+                If there's a tie, a random player from the tie is eliminated
+              </li>
+            </ul>
+          </div>
+
+          <div className="bg-robot-darker border-2 border-robot-accent p-6 rounded-lg">
+            <h2 className="text-2xl text-robot-accent mb-4">
+              Winning Conditions
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-xl text-robot-highlight mb-2">
+                  Human Wins If:
+                </h3>
+                <p className="text-lg">
+                  The human survives until the end of the game (when only 2
+                  players remain)
+                </p>
+              </div>
+              <div>
+                <h3 className="text-xl text-robot-accent mb-2">AIs Win If:</h3>
+                <p className="text-lg">The human is eliminated</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-12">
           <Link to="/play">
-            <Button className="bg-robot-highlight text-robot-dark hover:bg-robot-highlight/80 text-lg md:text-xl px-8 py-6">
-              PLAY
+            <Button className="bg-robot-highlight text-robot-dark hover:bg-robot-highlight/80 text-lg px-8 py-4">
+              Start Playing
             </Button>
           </Link>
-          <span className="absolute -right-6 -bottom-6 text-robot-accent animate-blink">
-            {"<"}
-          </span>
         </div>
       </div>
 
@@ -101,4 +159,4 @@ const Index = () => {
   );
 };
 
-export default Index;
+export default HowToPlay;
