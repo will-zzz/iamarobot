@@ -71,16 +71,6 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
 
   const currentPlayer = gameState?.players.find((p) => p.name === playerName);
 
-  // Debug: Log when messages change
-  useEffect(() => {
-    console.log(
-      "🎯 MESSAGES CHANGED - Length:",
-      messages.length,
-      "Messages:",
-      messages
-    );
-  }, [messages]);
-
   if (!isConnected) {
     return (
       <div className="flex items-center justify-center h-screen">

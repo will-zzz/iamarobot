@@ -47,7 +47,7 @@ export class GameEngine {
     this.io = new SocketIOServer(server, {
       cors: {
         origin: [
-          "http://localhost:8080",
+          "http://localhost:3000",
           "http://127.0.0.1:5500",
           "http://localhost:5500",
         ],
@@ -560,7 +560,7 @@ export class GameEngine {
 
     try {
       // Use the /calculate-votes endpoint to process votes
-      const response = await fetch(`http://localhost:3000/calculate-votes`, {
+      const response = await fetch(`${process.env.API_URL}/calculate-votes`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

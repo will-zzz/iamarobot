@@ -18,11 +18,11 @@ const server = createServer(app);
 
 app.use(express.json());
 
-// Allow requests from localhost:8080
+// Allow requests from localhost:3000
 app.use(
   cors({
     origin: [
-      "http://localhost:8080",
+      "http://localhost:3000",
       "http://127.0.0.1:5500",
       "http://localhost:5500",
     ],
@@ -30,7 +30,7 @@ app.use(
   })
 );
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT;
 
 // Initialize GameEngine with Socket.IO
 const gameEngine = new GameEngine(server, openai);

@@ -67,7 +67,7 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
   const [timeLeft, setTimeLeft] = useState<number>(0);
 
   const connect = useCallback(() => {
-    const newSocket = io("http://localhost:3000");
+    const newSocket = io(import.meta.env.VITE_API_URL);
 
     newSocket.on("connect", () => {
       setIsConnected(true);
@@ -79,12 +79,10 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
     });
 
     newSocket.on("game_state", (state: GameState) => {
-      console.log("Received game state:", state);
       setGameState(state);
     });
 
     newSocket.on("voting_phase_started", (data: { currentVoter: number }) => {
-      console.log("Voting phase started:", data);
       setGameState((prev) =>
         prev
           ? {
@@ -98,7 +96,6 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
     });
 
     newSocket.on("voter_advanced", (data: { currentVoter: number }) => {
-      console.log("Voter advanced:", data);
       setGameState((prev) =>
         prev
           ? {
@@ -114,12 +111,10 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
     });
 
     newSocket.on("vote_submitted", (data: Vote) => {
-      console.log("Vote submitted:", data);
       setVotes((prev) => [...prev, { ...data, timestamp: Date.now() }]);
     });
 
     newSocket.on("turn_advanced", (data: { currentTurn: number }) => {
-      console.log("Turn advanced:", data);
       setGameState((prev) =>
         prev
           ? {
@@ -149,7 +144,6 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
         isHuman: boolean;
         voteCounts: any;
       }) => {
-        console.log("Player eliminated:", data);
         setEliminatedPlayer(data);
         setGameState((prev) =>
           prev
@@ -167,7 +161,6 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
     newSocket.on(
       "game_ended",
       (data: { winner: string; finalPlayers: Player[] }) => {
-        console.log("Game ended:", data);
         setGameEnded(data);
         setGameState((prev) =>
           prev

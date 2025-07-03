@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 
 interface Participant {
@@ -25,16 +24,18 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
   // Function to start a new game
   const startGame = async () => {
     try {
-      const response = await fetch("http://localhost:3000/start-game", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ name: playerName }),
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/start-game`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ name: playerName }),
+        }
+      );
 
       const result = await response.json();
-      console.log("Game started:", result);
 
       setGameId(result.gameId);
       setParticipants(
@@ -50,12 +51,48 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
       console.error("Error starting game:", error);
       // Create mock participants for development
       const mockParticipants = [
-        { id: 1, name: playerName, isHuman: true, isSpeaking: false, message: "" },
-        { id: 2, name: "Robot1", isHuman: false, isSpeaking: false, message: "" },
-        { id: 3, name: "Robot2", isHuman: false, isSpeaking: false, message: "" },
-        { id: 4, name: "Robot3", isHuman: false, isSpeaking: false, message: "" },
-        { id: 5, name: "Robot4", isHuman: false, isSpeaking: false, message: "" },
-        { id: 6, name: "Robot5", isHuman: false, isSpeaking: false, message: "" },
+        {
+          id: 1,
+          name: playerName,
+          isHuman: true,
+          isSpeaking: false,
+          message: "",
+        },
+        {
+          id: 2,
+          name: "Robot1",
+          isHuman: false,
+          isSpeaking: false,
+          message: "",
+        },
+        {
+          id: 3,
+          name: "Robot2",
+          isHuman: false,
+          isSpeaking: false,
+          message: "",
+        },
+        {
+          id: 4,
+          name: "Robot3",
+          isHuman: false,
+          isSpeaking: false,
+          message: "",
+        },
+        {
+          id: 5,
+          name: "Robot4",
+          isHuman: false,
+          isSpeaking: false,
+          message: "",
+        },
+        {
+          id: 6,
+          name: "Robot5",
+          isHuman: false,
+          isSpeaking: false,
+          message: "",
+        },
       ];
       setParticipants(mockParticipants);
       setGameId("mock-game-id");
@@ -81,17 +118,15 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
 
   // Handle time up for chat phase
   const handleTimeUp = () => {
-    console.log("Voting phase started!");
     setIsVotingPhase(true);
     startVotingPhase();
   };
 
   const startVotingPhase = () => {
-    console.log("Starting voting phase with participants:", participants);
     // Start with the first participant
     setCurrentVoter(participants[0].id);
     setVotingResponses([]);
-    
+
     if (!participants[0].isHuman) {
       handleAiVote(participants[0].id);
     }
@@ -110,7 +145,7 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
 
     try {
       // Send the message to the server
-      const response = await fetch("http://localhost:3000/chat", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -142,7 +177,7 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
               : participant
           )
         );
-        
+
         // Advance to the next turn
         advanceTurn();
       }, 3000);
@@ -173,7 +208,7 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
             p.isHuman ? { ...p, isSpeaking: false, message: "" } : p
           )
         );
-        
+
         // Move to the next voter or end voting phase
         advanceVoter();
       }, 2000);
@@ -181,28 +216,27 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
   };
 
   const advanceVoter = () => {
-    const currentIndex = participants.findIndex(p => p.id === currentVoter);
+    const currentIndex = participants.findIndex((p) => p.id === currentVoter);
     const nextIndex = currentIndex + 1;
-    
+
     if (nextIndex < participants.length) {
       // Move to the next voter
       setCurrentVoter(participants[nextIndex].id);
-      
+
       // If next voter is AI, trigger their vote
       if (!participants[nextIndex].isHuman) {
         handleAiVote(participants[nextIndex].id);
       }
     } else {
       // All participants have voted, end the voting phase
-      console.log("Voting phase completed with responses:", votingResponses);
       setIsVotingPhase(false);
       setUserVoted(false);
       setCurrentVoter(null);
-      
+
       // Start a new chat round
       const firstParticipant = participants[0];
       setCurrentTurn(firstParticipant.id);
-      
+
       if (!firstParticipant.isHuman) {
         handleAiChat(firstParticipant.id);
       }
@@ -211,14 +245,13 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
 
   const advanceTurn = () => {
     if (isVotingPhase) {
-      console.log("Voting phase is active. Skipping turn advancement.");
       return;
     }
 
-    const currentIndex = participants.findIndex(p => p.id === currentTurn);
+    const currentIndex = participants.findIndex((p) => p.id === currentTurn);
     const nextIndex = (currentIndex + 1) % participants.length;
     const nextParticipant = participants[nextIndex];
-    
+
     setCurrentTurn(nextParticipant.id);
 
     if (!nextParticipant.isHuman) {
@@ -228,7 +261,6 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
 
   const handleAiChat = async (aiId: number) => {
     if (isVotingPhase) {
-      console.log("Voting phase is active. AI cannot chat.");
       return;
     }
 
@@ -238,7 +270,7 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
     }
 
     try {
-      const response = await fetch("http://localhost:3000/ai/chat", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/ai/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -269,25 +301,29 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
               : participant
           )
         );
-        
+
         // Advance to the next turn
         advanceTurn();
       }, 3000);
     } catch (error) {
       console.error("Error during AI chat:", error);
-      
+
       // For development, simulate AI response
-      setParticipants((prev) => 
-        prev.map((p) => 
-          p.id === aiId 
-            ? { ...p, isSpeaking: true, message: "This is a simulated AI response." }
+      setParticipants((prev) =>
+        prev.map((p) =>
+          p.id === aiId
+            ? {
+                ...p,
+                isSpeaking: true,
+                message: "This is a simulated AI response.",
+              }
             : p
         )
       );
-      
+
       setTimeout(() => {
-        setParticipants((prev) => 
-          prev.map((p) => 
+        setParticipants((prev) =>
+          prev.map((p) =>
             p.id === aiId ? { ...p, isSpeaking: false, message: "" } : p
           )
         );
@@ -303,7 +339,7 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
     }
 
     try {
-      const response = await fetch("http://localhost:3000/ai/vote", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/ai/vote`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -319,9 +355,9 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
       return result;
     } catch (error) {
       console.error("Error during AI vote:", error);
-      
+
       // For development, simulate AI vote
-      const mockVote = participants.find(p => p.isHuman)?.name || "Unknown";
+      const mockVote = participants.find((p) => p.isHuman)?.name || "Unknown";
       processAiVote(aiId, mockVote);
       return mockVote;
     }
@@ -347,7 +383,7 @@ export const useGameLogic = ({ playerName }: UseGameLogicProps) => {
           p.id === aiId ? { ...p, isSpeaking: false, message: "" } : p
         )
       );
-      
+
       // Move to the next voter
       advanceVoter();
     }, 2000);
