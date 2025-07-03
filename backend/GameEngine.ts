@@ -32,6 +32,10 @@ interface GameState {
   turnTimer: NodeJS.Timeout | null;
   roundNumber: number;
   eliminatedPlayers: number[];
+  lastMessage: string | null;
+  speakingHistory: { [playerId: number]: number }; // playerId -> last turn number
+  humanTimeoutId: NodeJS.Timeout | null;
+  humanIsTyping: boolean;
 }
 
 export class GameEngine {
@@ -66,6 +70,13 @@ export class GameEngine {
       socket.on("send_message", (data: { gameId: string; message: string }) => {
         this.handleSendMessage(socket, data);
       });
+
+      socket.on(
+        "typing_started",
+        (data: { gameId: string; playerId: number }) => {
+          this.handleHumanTyping(data.gameId, data.playerId);
+        }
+      );
 
       socket.on("submit_vote", (data: { gameId: string; vote: string }) => {
         this.handleSubmitVote(socket, data);
@@ -113,15 +124,48 @@ export class GameEngine {
     const game = this.games.get(gameId);
 
     if (!game || game.gamePhase !== "chat") {
-      socket.emit("error", { message: "Cannot send message now" });
+      console.error("Cannot send message now - not in chat phase");
       return;
     }
 
     // Find the player by socket ID
     const player = game.players.find((p) => p.socketId === socket.id);
-    if (!player || player.id !== game.currentTurn || player.isEliminated) {
-      socket.emit("error", { message: "Not your turn" });
+    if (!player || player.isEliminated) {
+      console.error("Player not found or eliminated");
       return;
+    }
+
+    // For humans, allow sending messages anytime during chat phase (they can interrupt)
+    // For AIs, only allow during their turn
+    if (!player.isHuman && player.id !== game.currentTurn) {
+      console.error("Not AI's turn");
+      return;
+    }
+
+    // If human is sending a message, make sure they have the turn
+    if (player.isHuman && game.currentTurn !== player.id) {
+      game.currentTurn = player.id;
+      game.speakingHistory[player.id] = game.roundNumber;
+
+      this.io.to(gameId).emit("turn_advanced", {
+        currentTurn: game.currentTurn,
+      });
+    }
+
+    // Clear any existing timeout since human is actively participating
+    if (player.isHuman && game.humanTimeoutId) {
+      clearTimeout(game.humanTimeoutId);
+      game.humanTimeoutId = null;
+    }
+
+    // Clear typing flag when human sends message
+    if (player.isHuman) {
+      if (game.humanIsTyping) {
+        console.log(
+          `⌨️ Game ${gameId}: Human finished typing, clearing typing flag`
+        );
+      }
+      game.humanIsTyping = false;
     }
 
     // Save message to database
@@ -132,6 +176,9 @@ export class GameEngine {
       },
     });
 
+    // Update last message for turn selection
+    game.lastMessage = message;
+
     // Broadcast message to all players
     this.io.to(gameId).emit("message_sent", {
       playerId: player.id,
@@ -140,7 +187,7 @@ export class GameEngine {
       isHuman: player.isHuman,
     });
 
-    // Advance to next turn
+    // Advance turn after message is sent
     this.advanceTurn(gameId);
   }
 
@@ -152,18 +199,26 @@ export class GameEngine {
     const game = this.games.get(gameId);
 
     if (!game || game.gamePhase !== "voting") {
-      socket.emit("error", { message: "Not voting phase" });
+      console.error("Not voting phase");
       return;
     }
 
     const player = game.players.find((p) => p.socketId === socket.id);
     if (!player || player.id !== game.currentVoter || player.isEliminated) {
-      socket.emit("error", { message: "Not your turn to vote" });
+      console.error("Not your turn to vote");
       return;
     }
 
     // Record the vote
     game.votingResponses.push(vote);
+
+    // Save vote to database
+    await prisma.message.create({
+      data: {
+        content: `${player.name}: ${vote}`,
+        gameId: parseInt(gameId),
+      },
+    });
 
     // Broadcast vote to all players
     this.io.to(gameId).emit("vote_submitted", {
@@ -173,8 +228,13 @@ export class GameEngine {
       isHuman: player.isHuman,
     });
 
+    // Immediately disable chatbox to prevent extra messages
+    this.io.to(gameId).emit("disable_chat");
+
     // Advance to next voter
-    this.advanceVoter(gameId);
+    setTimeout(() => {
+      this.advanceVoter(gameId);
+    }, 1000);
   }
 
   private handleDisconnect(socket: any) {
@@ -207,30 +267,27 @@ export class GameEngine {
     await prisma.player.create({
       data: {
         name: playerName,
-        identity: "You are the human",
+        identity: "You are a human player trying to blend in with AI players.",
         gameId: game.id,
       },
     });
 
     // Fetch all players
-    const dbPlayers = await prisma.player.findMany({
+    const allPlayers = await prisma.player.findMany({
       where: { gameId: game.id },
     });
 
-    // Create game state with randomized player order
-    const players: Player[] = dbPlayers.map((p) => ({
+    // Create game state with all players
+    const players: Player[] = allPlayers.map((p) => ({
       id: p.id,
       name: p.name,
       isHuman: p.name === playerName,
-      identity: p.identity || undefined,
+      identity: p.identity || "",
       isEliminated: false,
     }));
 
-    // Randomize player order (shuffle the array)
-    for (let i = players.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [players[i], players[j]] = [players[j], players[i]];
-    }
+    // Shuffle players to randomize positions
+    this.shuffleArray(players);
 
     const gameState: GameState = {
       id: gameId,
@@ -239,71 +296,23 @@ export class GameEngine {
       isVotingPhase: false,
       currentVoter: null,
       votingResponses: [],
-      gamePhase: "cutscene",
-      timeLeft: 60,
+      gamePhase: "waiting",
+      timeLeft: 0,
       turnTimer: null,
       roundNumber: 1,
       eliminatedPlayers: [],
+      lastMessage: null,
+      speakingHistory: {},
+      humanTimeoutId: null,
+      humanIsTyping: false,
     };
 
     this.games.set(gameId, gameState);
 
-    // Start the cutscene
-    this.startCutscene(gameId);
+    // Start chat phase immediately
+    this.startChatPhase(gameId);
 
     return { gameId, players };
-  }
-
-  private startCutscene(gameId: string) {
-    const game = this.games.get(gameId);
-    if (!game) return;
-
-    // Send cutscene start event
-    this.io.to(gameId).emit("cutscene_started");
-
-    // Moderator message
-    setTimeout(() => {
-      this.io.to(gameId).emit("moderator_message", {
-        message:
-          "You may be wondering why we've arrested you six. Please do not be alarmed when I tell you this, but... one of you is a human.",
-      });
-    }, 1000);
-
-    // AI reactions - wait for moderator to finish (about 4 seconds for the message)
-    const aiReactions = [
-      "What!?",
-      "No way!",
-      "The horror!",
-      "Impossible!",
-      "How dare you!",
-    ];
-    const aiPlayers = game.players.filter((p) => !p.isHuman);
-
-    aiPlayers.forEach((ai, index) => {
-      setTimeout(
-        () => {
-          this.io.to(gameId).emit("ai_reaction", {
-            playerId: ai.id,
-            playerName: ai.name,
-            reaction: aiReactions[index % aiReactions.length],
-          });
-        },
-        6000 + index * 800
-      ); // Start at 6 seconds (after moderator finishes)
-    });
-
-    // Final moderator message
-    setTimeout(() => {
-      this.io.to(gameId).emit("moderator_message", {
-        message:
-          "As there are five AIs to one human, we will trust you to uncover it yourselves. You will have 60 seconds to talk amongst yourselves, then you will all vote for someone to send to the crushers below. You will repeat this until the human is eliminated, or until two of you remain.",
-      });
-    }, 11000); // Wait for AI reactions to finish
-
-    // Start the game after cutscene
-    setTimeout(() => {
-      this.startChatPhase(gameId);
-    }, 1000); // Give more time for the final message
   }
 
   private startChatPhase(gameId: string) {
@@ -311,28 +320,20 @@ export class GameEngine {
     if (!game) return;
 
     game.gamePhase = "chat";
-    game.timeLeft = 60;
+    game.isVotingPhase = false;
+    game.currentVoter = null; // Clear voting state
+    game.timeLeft = 60; // 60 seconds for chat phase
 
-    // Select first player (randomly, but not the human)
-    const activePlayers = game.players.filter((p) => !p.isEliminated);
-    const nonHumanPlayers = activePlayers.filter((p) => !p.isHuman);
-    const firstPlayer =
-      nonHumanPlayers[Math.floor(Math.random() * nonHumanPlayers.length)];
+    // Emit voting phase ended event and updated game state to clear voting UI
+    this.io.to(gameId).emit("voting_phase_ended");
+    this.io.to(gameId).emit("enable_chat"); // Re-enable chatbox for new chat phase
+    this.io.to(gameId).emit("game_state", this.getPublicGameState(game));
 
-    game.currentTurn = firstPlayer.id;
-
-    this.io.to(gameId).emit("chat_phase_started", {
-      currentTurn: game.currentTurn,
-      timeLeft: game.timeLeft,
-      roundNumber: game.roundNumber,
-    });
-
+    // Start turn timer
     this.startTurnTimer(gameId);
 
-    // If first player is AI, trigger AI response
-    if (!firstPlayer.isHuman) {
-      this.handleAITurn(gameId);
-    }
+    // Advance to first turn
+    this.advanceTurn(gameId);
   }
 
   private startVotingPhase(gameId: string) {
@@ -343,6 +344,9 @@ export class GameEngine {
     game.isVotingPhase = true;
     game.votingResponses = [];
 
+    // Clear the current turn to remove "SPEAKING" tag from chat phase
+    game.currentTurn = null;
+
     // Find first active player for voting
     const activePlayers = game.players.filter((p) => !p.isEliminated);
     game.currentVoter = activePlayers[0].id;
@@ -350,6 +354,9 @@ export class GameEngine {
     this.io.to(gameId).emit("voting_phase_started", {
       currentVoter: game.currentVoter,
     });
+
+    // Also emit updated game state to ensure frontend gets currentTurn = null
+    this.io.to(gameId).emit("game_state", this.getPublicGameState(game));
 
     // If first voter is AI, trigger AI vote
     if (!activePlayers[0].isHuman) {
@@ -361,14 +368,48 @@ export class GameEngine {
     const game = this.games.get(gameId);
     if (!game || game.gamePhase !== "chat") return;
 
+    // CRITICAL FIX: If human is actively typing, don't advance turn
+    if (game.humanIsTyping) {
+      console.log(`⏳ Game ${gameId}: Human is typing, not advancing turn`);
+      return;
+    }
+
     const activePlayers = game.players.filter((p) => !p.isEliminated);
-    const currentIndex = activePlayers.findIndex(
-      (p) => p.id === game.currentTurn
-    );
-    const nextIndex = (currentIndex + 1) % activePlayers.length;
-    const nextPlayer = activePlayers[nextIndex];
+    const nextPlayer = this.determineNextSpeaker(gameId, activePlayers);
+
+    // If no next player determined (no name mentioned), wait for human input or timeout
+    if (!nextPlayer) {
+      console.log(
+        `⏳ Game ${gameId}: No name mentioned, waiting for human input or 3-second timeout`
+      );
+
+      // Clear any existing timeout
+      if (game.humanTimeoutId) {
+        clearTimeout(game.humanTimeoutId);
+      }
+
+      // Set 3-second timeout to give turn to random AI
+      game.humanTimeoutId = setTimeout(() => {
+        const currentGame = this.games.get(gameId);
+        if (currentGame && currentGame.gamePhase === "chat") {
+          console.log(
+            `⏰ Game ${gameId}: 3 seconds passed, giving turn to random AI`
+          );
+          this.assignTurnToRandomAI(gameId, activePlayers);
+        }
+      }, 3000);
+
+      console.log(
+        `⏳ Game ${gameId}: Set 3-second timeout for random AI selection`
+      );
+
+      return;
+    }
 
     game.currentTurn = nextPlayer.id;
+
+    // Update speaking history
+    game.speakingHistory[nextPlayer.id] = game.roundNumber;
 
     this.io.to(gameId).emit("turn_advanced", {
       currentTurn: game.currentTurn,
@@ -378,6 +419,97 @@ export class GameEngine {
     if (!nextPlayer.isHuman) {
       this.handleAITurn(gameId);
     }
+  }
+
+  private determineNextSpeaker(
+    gameId: string,
+    activePlayers: Player[]
+  ): Player | null {
+    const game = this.games.get(gameId);
+    if (!game) return activePlayers[0];
+
+    // Get the last message to check for name mentions
+    const lastMessage = this.getLastMessage(gameId);
+
+    console.log(`🎯 TURN SELECTION DEBUG - Game ${gameId}:`);
+    console.log(`   Last message: "${lastMessage}"`);
+    console.log(
+      `   Active players:`,
+      activePlayers.map((p) => `${p.name} (${p.isHuman ? "human" : "ai"})`)
+    );
+
+    // 1. Check for name mentions first
+    if (lastMessage) {
+      const mentionedPlayer = this.findMentionedPlayer(
+        lastMessage,
+        activePlayers
+      );
+      if (mentionedPlayer) {
+        console.log(`   ✅ Name mentioned, ${mentionedPlayer.name} gets turn`);
+        return mentionedPlayer;
+      }
+    }
+
+    // 2. If no name mentioned, don't assign a turn immediately
+    // The turn will be assigned after 3 seconds or when human starts typing
+    console.log(`   ⏳ No name mentioned, waiting for human input or timeout`);
+    return null;
+  }
+
+  private getLastMessage(gameId: string): string | null {
+    // This would need to be implemented to get the last message from the database
+    // For now, we'll need to track this in the game state
+    const game = this.games.get(gameId);
+    return game?.lastMessage || null;
+  }
+
+  private findMentionedPlayer(
+    message: string,
+    players: Player[]
+  ): Player | null {
+    const messageLower = message.toLowerCase();
+
+    for (const player of players) {
+      const nameLower = player.name.toLowerCase();
+
+      // Check if message contains the full name
+      if (messageLower.includes(nameLower)) {
+        return player;
+      }
+
+      // Check if message contains a word that matches the beginning of the player's name
+      const nameWords = nameLower.split(" ");
+      for (const word of nameWords) {
+        if (word.length > 0 && messageLower.includes(word)) {
+          return player;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private findLongestSilentPlayer(
+    gameId: string,
+    activePlayers: Player[]
+  ): Player {
+    const game = this.games.get(gameId);
+    if (!game) return activePlayers[0];
+
+    let longestSilentPlayer = activePlayers[0];
+    let longestSilentTurns = game.roundNumber;
+
+    for (const player of activePlayers) {
+      const lastSpoken = game.speakingHistory[player.id] || 0;
+      const turnsSilent = game.roundNumber - lastSpoken;
+
+      if (turnsSilent > longestSilentTurns) {
+        longestSilentTurns = turnsSilent;
+        longestSilentPlayer = player;
+      }
+    }
+
+    return longestSilentPlayer;
   }
 
   private advanceVoter(gameId: string) {
@@ -409,26 +541,142 @@ export class GameEngine {
     } else {
       // All players have voted, process elimination
       console.log(`Game ${gameId}: All players voted, processing elimination`);
-      this.processElimination(gameId);
+      this.processElimination(gameId).catch(console.error);
     }
   }
 
-  private processElimination(gameId: string) {
+  private async processElimination(gameId: string) {
     const game = this.games.get(gameId);
     if (!game) return;
+
+    // Set game phase to elimination to prevent further input
+    game.gamePhase = "elimination";
+    this.io.to(gameId).emit("game_state", this.getPublicGameState(game));
 
     console.log(
       `Game ${gameId}: Processing elimination. Votes:`,
       game.votingResponses
     );
 
-    // Count votes
+    try {
+      // Use the /calculate-votes endpoint to process votes
+      const response = await fetch(`http://localhost:3000/calculate-votes`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ votes: game.votingResponses }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to calculate votes");
+      }
+
+      const voteCounts = await response.json();
+      console.log(`Game ${gameId}: Vote counts:`, voteCounts);
+
+      // Find player with most votes
+      let eliminatedPlayerName = "";
+      let maxVotes = 0;
+
+      Object.entries(voteCounts as { [key: string]: number }).forEach(
+        ([name, count]) => {
+          if (count > maxVotes) {
+            maxVotes = count;
+            eliminatedPlayerName = name;
+          }
+        }
+      );
+
+      console.log(
+        `Game ${gameId}: Eliminating player: ${eliminatedPlayerName} with ${maxVotes} votes`
+      );
+
+      // Find the eliminated player
+      const eliminatedPlayer = game.players.find(
+        (p) => p.name === eliminatedPlayerName
+      );
+      if (eliminatedPlayer) {
+        eliminatedPlayer.isEliminated = true;
+        game.eliminatedPlayers.push(eliminatedPlayer.id);
+
+        // Add moderator message to chat
+        await prisma.message.create({
+          data: {
+            content: `Moderator: ${eliminatedPlayer.name} has been eliminated. Continue to search for the human.`,
+            gameId: parseInt(gameId),
+          },
+        });
+
+        // Broadcast moderator message to chat
+        this.io.to(gameId).emit("message_sent", {
+          playerId: 0,
+          playerName: "Moderator",
+          message: `${eliminatedPlayer.name} has been eliminated. Continue to search for the human.`,
+          isHuman: false,
+        });
+
+        // Broadcast elimination event
+        this.io.to(gameId).emit("player_eliminated", {
+          playerId: eliminatedPlayer.id,
+          playerName: eliminatedPlayer.name,
+          isHuman: eliminatedPlayer.isHuman,
+          voteCounts,
+        });
+
+        // Check game end conditions
+        const activePlayers = game.players.filter((p) => !p.isEliminated);
+        const humanPlayer = activePlayers.find((p) => p.isHuman);
+
+        console.log(
+          `Game ${gameId}: After elimination. Active players: ${activePlayers.length}, Human alive: ${!!humanPlayer}`
+        );
+
+        if (!humanPlayer) {
+          // Human eliminated - AIs win
+          console.log(`Game ${gameId}: Human eliminated - AIs win`);
+          this.endGame(gameId, "ai_win");
+        } else if (activePlayers.length <= 2) {
+          // Only 2 players remain - Human wins
+          console.log(`Game ${gameId}: Only 2 players remain - Human wins`);
+          this.endGame(gameId, "human_win");
+        } else {
+          // Continue to next round
+          console.log(`Game ${gameId}: Continuing to next round`);
+          setTimeout(() => {
+            game.roundNumber++;
+            this.startChatPhase(gameId);
+          }, 3000);
+        }
+      } else {
+        console.error(
+          `Game ${gameId}: Could not find player to eliminate: ${eliminatedPlayerName}`
+        );
+      }
+    } catch (error) {
+      console.error(`Game ${gameId}: Error processing elimination:`, error);
+      // Fallback to simple vote counting if API fails
+      this.processEliminationFallback(gameId);
+    }
+  }
+
+  private processEliminationFallback(gameId: string) {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    // Set game phase to elimination to prevent further input
+    game.gamePhase = "elimination";
+    this.io.to(gameId).emit("game_state", this.getPublicGameState(game));
+
+    console.log(`Game ${gameId}: Using fallback elimination processing`);
+
+    // Count votes manually as fallback
     const voteCounts: { [key: string]: number } = {};
     game.votingResponses.forEach((vote) => {
       voteCounts[vote] = (voteCounts[vote] || 0) + 1;
     });
 
-    console.log(`Game ${gameId}: Vote counts:`, voteCounts);
+    console.log(`Game ${gameId}: Fallback vote counts:`, voteCounts);
 
     // Find player with most votes
     let eliminatedPlayerName = "";
@@ -442,7 +690,7 @@ export class GameEngine {
     });
 
     console.log(
-      `Game ${gameId}: Eliminating player: ${eliminatedPlayerName} with ${maxVotes} votes`
+      `Game ${gameId}: Fallback eliminating player: ${eliminatedPlayerName} with ${maxVotes} votes`
     );
 
     // Find the eliminated player
@@ -453,6 +701,25 @@ export class GameEngine {
       eliminatedPlayer.isEliminated = true;
       game.eliminatedPlayers.push(eliminatedPlayer.id);
 
+      // Add moderator message to chat
+      prisma.message
+        .create({
+          data: {
+            content: `Moderator: ${eliminatedPlayer.name} has been eliminated. Continue to search for the human.`,
+            gameId: parseInt(gameId),
+          },
+        })
+        .catch(console.error);
+
+      // Broadcast moderator message to chat
+      this.io.to(gameId).emit("message_sent", {
+        playerId: 0,
+        playerName: "Moderator",
+        message: `${eliminatedPlayer.name} has been eliminated. Continue to search for the human.`,
+        isHuman: false,
+      });
+
+      // Broadcast elimination event
       this.io.to(gameId).emit("player_eliminated", {
         playerId: eliminatedPlayer.id,
         playerName: eliminatedPlayer.name,
@@ -464,30 +731,16 @@ export class GameEngine {
       const activePlayers = game.players.filter((p) => !p.isEliminated);
       const humanPlayer = activePlayers.find((p) => p.isHuman);
 
-      console.log(
-        `Game ${gameId}: After elimination. Active players: ${activePlayers.length}, Human alive: ${!!humanPlayer}`
-      );
-
       if (!humanPlayer) {
-        // Human eliminated - AIs win
-        console.log(`Game ${gameId}: Human eliminated - AIs win`);
         this.endGame(gameId, "ai_win");
       } else if (activePlayers.length <= 2) {
-        // Only 2 players remain - Human wins
-        console.log(`Game ${gameId}: Only 2 players remain - Human wins`);
         this.endGame(gameId, "human_win");
       } else {
-        // Continue to next round
-        console.log(`Game ${gameId}: Continuing to next round`);
         setTimeout(() => {
           game.roundNumber++;
           this.startChatPhase(gameId);
         }, 3000);
       }
-    } else {
-      console.error(
-        `Game ${gameId}: Could not find player to eliminate: ${eliminatedPlayerName}`
-      );
     }
   }
 
@@ -545,6 +798,9 @@ export class GameEngine {
           },
         });
 
+        // Update last message for turn selection
+        game.lastMessage = response;
+
         // Broadcast AI message
         this.io.to(gameId).emit("message_sent", {
           playerId: aiPlayer.id,
@@ -559,7 +815,7 @@ export class GameEngine {
         }, 3500);
       }
     } catch (error) {
-      console.error("AI chat error:", error);
+      console.error(`Game ${gameId}: AI chat error:`, error);
       // Fallback: advance turn anyway
       setTimeout(() => {
         this.advanceTurn(gameId);
@@ -604,6 +860,14 @@ export class GameEngine {
         // Record the vote
         game.votingResponses.push(vote);
 
+        // Save AI vote to database
+        await prisma.message.create({
+          data: {
+            content: `${aiPlayer.name}: ${vote}`,
+            gameId: parseInt(gameId),
+          },
+        });
+
         // Broadcast AI vote
         this.io.to(gameId).emit("vote_submitted", {
           playerId: aiPlayer.id,
@@ -611,6 +875,9 @@ export class GameEngine {
           vote: `${aiPlayer.name}: ${vote}`,
           isHuman: false,
         });
+
+        // Immediately disable chatbox to prevent extra messages
+        this.io.to(gameId).emit("disable_chat");
 
         // Advance voter
         setTimeout(() => {
@@ -666,7 +933,11 @@ export class GameEngine {
         isHuman: p.isHuman,
         isEliminated: p.isEliminated || false,
       })),
-      currentTurn: game.currentTurn,
+      // During voting or elimination phase, don't send currentTurn to prevent "SPEAKING" styling
+      currentTurn:
+        game.isVotingPhase || game.gamePhase === "elimination"
+          ? null
+          : game.currentTurn,
       isVotingPhase: game.isVotingPhase,
       currentVoter: game.currentVoter,
       gamePhase: game.gamePhase,
@@ -734,6 +1005,71 @@ export class GameEngine {
       } else {
         i--;
       }
+    }
+  }
+
+  handleHumanTyping(gameId: string, playerId: number) {
+    const game = this.games.get(gameId);
+    if (!game || game.gamePhase !== "chat") return;
+
+    // Find the human player
+    const humanPlayer = game.players.find((p) => p.isHuman);
+    if (!humanPlayer) return;
+
+    console.log(
+      `⌨️ Game ${gameId}: Human started typing, giving them the turn immediately`
+    );
+    console.log(`   Current timeout exists: ${!!game.humanTimeoutId}`);
+
+    // Clear any existing timeout (this is the key fix)
+    if (game.humanTimeoutId) {
+      clearTimeout(game.humanTimeoutId);
+      game.humanTimeoutId = null;
+      console.log(`   ✅ Cleared existing timeout`);
+    }
+
+    // Set flag that human is actively typing
+    game.humanIsTyping = true;
+
+    // Assign turn to human immediately
+    game.currentTurn = humanPlayer.id;
+    game.speakingHistory[humanPlayer.id] = game.roundNumber;
+
+    this.io.to(gameId).emit("turn_advanced", {
+      currentTurn: game.currentTurn,
+    });
+  }
+
+  private assignTurnToRandomAI(gameId: string, activePlayers: Player[]) {
+    const game = this.games.get(gameId);
+    if (!game) return;
+
+    // Filter to only AI players
+    const aiPlayers = activePlayers.filter((p) => !p.isHuman);
+    if (aiPlayers.length === 0) return;
+
+    // Pick a random AI player
+    const randomAI = aiPlayers[Math.floor(Math.random() * aiPlayers.length)];
+
+    console.log(
+      `🤖 Game ${gameId}: Assigning turn to random AI: ${randomAI.name}`
+    );
+
+    game.currentTurn = randomAI.id;
+    game.speakingHistory[randomAI.id] = game.roundNumber;
+
+    this.io.to(gameId).emit("turn_advanced", {
+      currentTurn: game.currentTurn,
+    });
+
+    // Trigger AI response
+    this.handleAITurn(gameId);
+  }
+
+  private shuffleArray<T>(array: T[]): void {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
     }
   }
 }

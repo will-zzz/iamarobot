@@ -31,15 +31,17 @@ const Robot: React.FC<RobotProps> = ({
 
   return (
     <div
-      className={`flex flex-col items-center p-3 rounded-lg border-2 ${getBorderColor()} ${getBackgroundColor()} transition-all duration-300 min-w-[120px] max-w-[120px]`}
+      className={`flex flex-col items-center justify-center p-3 rounded-lg border-2 ${getBorderColor()} ${getBackgroundColor()} transition-all duration-300 w-full h-full`}
     >
-      <div className="w-14 h-14 bg-robot-accent rounded-full flex items-center justify-center mb-2">
-        <span className="text-robot-dark text-xl">{isHuman ? "👤" : "🤖"}</span>
+      <div className="w-1/4 h-1/4 bg-robot-accent rounded-full flex items-center justify-center mb-2">
+        <span className="text-robot-dark text-3xl">
+          {isHuman ? "👤" : "🤖"}
+        </span>
       </div>
 
       <div className="text-center">
         <div
-          className={`font-bold text-sm ${isHuman ? "text-robot-accent" : "text-robot-light"}`}
+          className={`font-bold text-lg ${isHuman ? "text-robot-accent" : "text-robot-light"}`}
         >
           {name}
         </div>
@@ -49,14 +51,6 @@ const Robot: React.FC<RobotProps> = ({
 
         {isEliminated && (
           <div className="text-red-400 text-xs mt-1">ELIMINATED</div>
-        )}
-
-        {isCurrentTurn && !isEliminated && (
-          <div className="text-robot-accent text-xs mt-1">SPEAKING</div>
-        )}
-
-        {isCurrentVoter && !isEliminated && (
-          <div className="text-yellow-400 text-xs mt-1">VOTING</div>
         )}
       </div>
     </div>

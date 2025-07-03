@@ -1,7 +1,11 @@
 import React, { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { useGameSocket } from "../hooks/useGameSocket";
 import Robot from "./Robot";
 import Timer from "./Timer";
+import { useToast } from "@/hooks/use-toast";
+import { Toaster } from "@/components/ui/toaster";
+import { Button } from "@/components/ui/button";
 
 interface GameArenaProps {
   gameId: string;
@@ -14,46 +18,32 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
     messages,
     votes,
     isConnected,
-    cutsceneMessages,
-    aiReactions,
     eliminatedPlayer,
     gameEnded,
     sendMessage,
+    sendTypingEvent,
     submitVote,
   } = useGameSocket({ gameId, playerName });
 
+  const { toast } = useToast();
   const [inputMessage, setInputMessage] = useState("");
-  const [currentTypingMessage, setCurrentTypingMessage] = useState("");
-  const [typingIndex, setTypingIndex] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Typewriter effect for cutscene messages
-  useEffect(() => {
-    if (cutsceneMessages.length > 0 && typingIndex < cutsceneMessages.length) {
-      const message = cutsceneMessages[typingIndex];
-      let charIndex = 0;
-      setCurrentTypingMessage("");
-
-      const typeInterval = setInterval(() => {
-        if (charIndex < message.length) {
-          setCurrentTypingMessage((prev) => prev + message[charIndex]);
-          charIndex++;
-        } else {
-          clearInterval(typeInterval);
-          setTimeout(() => {
-            setTypingIndex((prev) => prev + 1);
-          }, 1000);
-        }
-      }, 50);
-
-      return () => clearInterval(typeInterval);
-    }
-  }, [cutsceneMessages, typingIndex]);
 
   // Auto-scroll to bottom of messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, votes]);
+
+  // Show toast notification when someone is eliminated
+  useEffect(() => {
+    if (eliminatedPlayer) {
+      toast({
+        title: `${eliminatedPlayer.playerName} was eliminated!`,
+        description: eliminatedPlayer.isHuman ? "Game over!" : null,
+        variant: eliminatedPlayer.isHuman ? "destructive" : "default",
+      });
+    }
+  }, [eliminatedPlayer, toast]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +71,16 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
 
   const currentPlayer = gameState?.players.find((p) => p.name === playerName);
 
+  // Debug: Log when messages change
+  useEffect(() => {
+    console.log(
+      "🎯 MESSAGES CHANGED - Length:",
+      messages.length,
+      "Messages:",
+      messages
+    );
+  }, [messages]);
+
   if (!isConnected) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -93,34 +93,6 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
     return (
       <div className="flex items-center justify-center h-screen">
         <div className="text-robot-light text-xl">Loading game...</div>
-      </div>
-    );
-  }
-
-  // Cutscene phase
-  if (gameState.gamePhase === "cutscene") {
-    return (
-      <div className="h-screen bg-robot-dark flex flex-col overflow-hidden">
-        <div className="flex-1 flex items-center justify-center p-8 min-h-0">
-          <div className="max-w-4xl w-full">
-            <div className="bg-robot-darker border-2 border-robot-accent p-8 rounded-lg">
-              <div className="text-robot-light text-xl leading-relaxed mb-6">
-                {currentTypingMessage}
-                <span className="animate-pulse">|</span>
-              </div>
-
-              {aiReactions.length > 0 && (
-                <div className="space-y-2">
-                  {aiReactions.map((reaction, index) => (
-                    <div key={index} className="text-robot-accent text-lg">
-                      {reaction.playerName}: "{reaction.reaction}"
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
       </div>
     );
   }
@@ -140,10 +112,16 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
                   ? "The human successfully survived and won the game!"
                   : "The AIs successfully identified and eliminated the human!"}
               </p>
-              <div className="text-robot-accent text-lg">
+              <div className="text-robot-accent text-lg mb-8">
                 Final survivors:{" "}
                 {gameEnded.finalPlayers.map((p) => p.name).join(", ")}
               </div>
+              <Button
+                onClick={() => window.location.reload()}
+                className="bg-robot-highlight text-robot-dark hover:bg-robot-highlight/80 text-lg px-8 py-4"
+              >
+                Play Again
+              </Button>
             </div>
           </div>
         </div>
@@ -153,6 +131,7 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
 
   return (
     <div className="h-full bg-robot-dark flex flex-col overflow-hidden">
+      <Toaster />
       {/* Header */}
       <div className="h-16 bg-robot-darker border-b-2 border-robot-accent px-4 flex items-center flex-shrink-0">
         <div className="flex justify-between items-center w-full">
@@ -167,8 +146,8 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
       {/* Main Game Area */}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {/* Robots Section */}
-        <div className="flex-1 p-4 flex items-end justify-center min-w-0">
-          <div className="flex justify-center items-end space-x-3 w-full max-w-full">
+        <div className="flex-1 p-6 flex items-center justify-center min-w-0 ">
+          <div className="grid grid-cols-3 auto-rows-fr gap-6 w-full h-full">
             {gameState.players.map((player) => (
               <Robot
                 key={player.id}
@@ -183,25 +162,30 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
         </div>
 
         {/* Chat/Voting Section */}
-        <div className="w-80 bg-robot-darker border-l-2 border-robot-accent p-4 flex flex-col flex-shrink-0 min-h-0">
+        <div className="w-[28rem] bg-robot-darker border-l-2 border-robot-accent p-6 flex flex-col flex-shrink-0 min-h-0">
           <div className="flex-1 overflow-y-auto mb-4 min-h-0">
-            <div className="space-y-2">
-              {messages.map((msg, index) => (
-                <div key={index} className="bg-robot-dark p-3 rounded">
-                  <div className="text-robot-accent font-bold">
-                    {msg.playerName}
+            <div className="space-y-3">
+              {[...messages, ...votes]
+                .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
+                .map((item, index) => (
+                  <div
+                    key={
+                      item.timestamp || `${item.playerId || "vote"}-${index}`
+                    }
+                    className={`bg-robot-dark p-3 rounded ${
+                      "vote" in item ? "border-l-4 border-robot-accent" : ""
+                    }`}
+                  >
+                    <div className="text-robot-accent font-bold">
+                      {item.playerName}
+                    </div>
+                    <div className="text-robot-light">
+                      {"message" in item
+                        ? item.message
+                        : item.vote.split(": ")[1] || item.vote}
+                    </div>
                   </div>
-                  <div className="text-robot-light">{msg.message}</div>
-                </div>
-              ))}
-              {votes.map((vote, index) => (
-                <div
-                  key={index}
-                  className="bg-robot-dark p-3 rounded border-l-4 border-robot-accent"
-                >
-                  <div className="text-robot-light">{vote.vote}</div>
-                </div>
-              ))}
+                ))}
             </div>
             <div ref={messagesEndRef} />
           </div>
@@ -215,22 +199,35 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
               <input
                 type="text"
                 value={inputMessage}
-                onChange={(e) => setInputMessage(e.target.value)}
+                onChange={(e) => {
+                  setInputMessage(e.target.value);
+                  // Emit typing event whenever human starts typing (first character) - only during chat phase
+                  if (
+                    e.target.value.length === 1 &&
+                    gameState.gamePhase === "chat"
+                  ) {
+                    sendTypingEvent();
+                  }
+                }}
                 placeholder={
                   gameState.gamePhase === "voting"
                     ? isMyTurn()
                       ? "Enter your vote..."
                       : "Waiting for your turn to vote..."
-                    : isMyTurn()
-                      ? "Type your message..."
-                      : "Waiting for your turn..."
+                    : "Type your message..."
                 }
-                disabled={!isMyTurn()}
+                disabled={
+                  gameState.gamePhase === "voting" ? !isMyTurn() : false
+                }
                 className="flex-1 bg-robot-dark border border-robot-accent text-robot-light px-3 py-2 rounded disabled:opacity-50 min-w-0"
               />
               <button
                 type="submit"
-                disabled={!isMyTurn() || !inputMessage.trim()}
+                disabled={
+                  gameState.gamePhase === "voting"
+                    ? !isMyTurn() || !inputMessage.trim()
+                    : !inputMessage.trim()
+                }
                 className="bg-robot-accent text-robot-dark px-4 py-2 rounded disabled:opacity-50 hover:bg-robot-accent/80 whitespace-nowrap"
               >
                 {gameState.gamePhase === "voting" ? "Vote" : "Send"}
@@ -239,28 +236,6 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
           )}
         </div>
       </div>
-
-      {/* Elimination Overlay */}
-      {eliminatedPlayer && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-robot-darker border-2 border-robot-accent p-8 rounded-lg text-center">
-            <h2 className="text-robot-light text-3xl mb-4">
-              {eliminatedPlayer.playerName} has been eliminated!
-            </h2>
-            <p className="text-robot-light text-xl mb-4">
-              {eliminatedPlayer.isHuman
-                ? "The human has been caught!"
-                : "An AI has been eliminated!"}
-            </p>
-            <div className="text-robot-accent text-lg">
-              Vote counts:{" "}
-              {Object.entries(eliminatedPlayer.voteCounts)
-                .map(([name, count]) => `${name}: ${count}`)
-                .join(", ")}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { io, Socket } from "socket.io-client";
 
 interface Player {
@@ -30,6 +30,7 @@ interface Message {
   playerName: string;
   message: string;
   isHuman: boolean;
+  timestamp?: number;
 }
 
 interface Vote {
@@ -37,6 +38,7 @@ interface Vote {
   playerName: string;
   vote: string;
   isHuman: boolean;
+  timestamp?: number;
 }
 
 interface UseGameSocketProps {
@@ -50,10 +52,6 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [votes, setVotes] = useState<Vote[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [cutsceneMessages, setCutsceneMessages] = useState<string[]>([]);
-  const [aiReactions, setAiReactions] = useState<
-    { playerId: number; playerName: string; reaction: string }[]
-  >([]);
   const [eliminatedPlayer, setEliminatedPlayer] = useState<{
     playerId: number;
     playerName: string;
@@ -64,18 +62,19 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
     winner: string;
     finalPlayers: Player[];
   } | null>(null);
+  const [currentTurn, setCurrentTurn] = useState<number | null>(null);
+  const [gamePhase, setGamePhase] = useState<string>("waiting");
+  const [timeLeft, setTimeLeft] = useState<number>(0);
 
   const connect = useCallback(() => {
     const newSocket = io("http://localhost:3000");
 
     newSocket.on("connect", () => {
-      console.log("Connected to server");
       setIsConnected(true);
       newSocket.emit("join_game", { gameId, playerName });
     });
 
     newSocket.on("disconnect", () => {
-      console.log("Disconnected from server");
       setIsConnected(false);
     });
 
@@ -83,47 +82,6 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
       console.log("Received game state:", state);
       setGameState(state);
     });
-
-    newSocket.on("cutscene_started", () => {
-      console.log("Cutscene started");
-      setCutsceneMessages([]);
-      setAiReactions([]);
-    });
-
-    newSocket.on("moderator_message", (data: { message: string }) => {
-      console.log("Moderator message:", data.message);
-      setCutsceneMessages((prev) => [...prev, data.message]);
-    });
-
-    newSocket.on(
-      "ai_reaction",
-      (data: { playerId: number; playerName: string; reaction: string }) => {
-        console.log("AI reaction:", data);
-        setAiReactions((prev) => [...prev, data]);
-      }
-    );
-
-    newSocket.on(
-      "chat_phase_started",
-      (data: {
-        currentTurn: number;
-        timeLeft: number;
-        roundNumber: number;
-      }) => {
-        console.log("Chat phase started:", data);
-        setGameState((prev) =>
-          prev
-            ? {
-                ...prev,
-                gamePhase: "chat",
-                currentTurn: data.currentTurn,
-                timeLeft: data.timeLeft,
-                roundNumber: data.roundNumber,
-              }
-            : null
-        );
-      }
-    );
 
     newSocket.on("voting_phase_started", (data: { currentVoter: number }) => {
       console.log("Voting phase started:", data);
@@ -134,29 +92,6 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
               gamePhase: "voting",
               isVotingPhase: true,
               currentVoter: data.currentVoter,
-            }
-          : null
-      );
-      setVotes([]);
-    });
-
-    newSocket.on("message_sent", (data: Message) => {
-      console.log("Message sent:", data);
-      setMessages((prev) => [...prev, data]);
-    });
-
-    newSocket.on("vote_submitted", (data: Vote) => {
-      console.log("Vote submitted:", data);
-      setVotes((prev) => [...prev, data]);
-    });
-
-    newSocket.on("turn_advanced", (data: { currentTurn: number }) => {
-      console.log("Turn advanced:", data);
-      setGameState((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentTurn: data.currentTurn,
             }
           : null
       );
@@ -174,8 +109,28 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
       );
     });
 
+    newSocket.on("message_sent", (data: Message) => {
+      setMessages((prev) => [...prev, { ...data, timestamp: Date.now() }]);
+    });
+
+    newSocket.on("vote_submitted", (data: Vote) => {
+      console.log("Vote submitted:", data);
+      setVotes((prev) => [...prev, { ...data, timestamp: Date.now() }]);
+    });
+
+    newSocket.on("turn_advanced", (data: { currentTurn: number }) => {
+      console.log("Turn advanced:", data);
+      setGameState((prev) =>
+        prev
+          ? {
+              ...prev,
+              currentTurn: data.currentTurn,
+            }
+          : null
+      );
+    });
+
     newSocket.on("time_update", (data: { timeLeft: number }) => {
-      console.log("Time update:", data);
       setGameState((prev) =>
         prev
           ? {
@@ -238,20 +193,33 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
 
   const sendMessage = useCallback(
     (message: string) => {
-      if (socket && isConnected) {
+      if (socket && message.trim()) {
         socket.emit("send_message", { gameId, message });
       }
     },
-    [socket, isConnected, gameId]
+    [socket, gameId]
   );
+
+  const sendTypingEvent = useCallback(() => {
+    if (socket && gameState?.currentTurn) {
+      // Find the human player
+      const humanPlayer = gameState.players.find((p) => p.isHuman);
+      if (humanPlayer) {
+        socket.emit("typing_started", {
+          gameId,
+          playerId: humanPlayer.id,
+        });
+      }
+    }
+  }, [socket, gameId, gameState]);
 
   const submitVote = useCallback(
     (vote: string) => {
-      if (socket && isConnected) {
+      if (socket && vote.trim()) {
         socket.emit("submit_vote", { gameId, vote });
       }
     },
-    [socket, isConnected, gameId]
+    [socket, gameId]
   );
 
   useEffect(() => {
@@ -274,11 +242,10 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
     messages,
     votes,
     isConnected,
-    cutsceneMessages,
-    aiReactions,
     eliminatedPlayer,
     gameEnded,
     sendMessage,
+    sendTypingEvent,
     submitVote,
   };
 };
