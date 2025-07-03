@@ -10,7 +10,8 @@
     "db-reset": "npx prisma migrate reset",
     "db-deploy": "npx prisma migrate deploy && npx prisma generate",
     "db-studio": "npx prisma studio",
-    "start:prod": "bash start.sh"
+    "start:prod": "bash start.sh",
+    "postinstall": "npx prisma generate"
   },
   "author": "",
   "license": "ISC",
