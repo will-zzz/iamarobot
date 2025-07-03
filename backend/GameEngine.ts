@@ -561,20 +561,8 @@ export class GameEngine {
     );
 
     try {
-      // Use the /calculate-votes endpoint to process votes
-      const response = await fetch(`${process.env.API_URL}/calculate-votes`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ votes: game.votingResponses }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to calculate votes");
-      }
-
-      const voteCounts = await response.json();
+      // Process votes using AI to extract player names
+      const voteCounts = await this.calculateVotes(game.votingResponses);
       console.log(`Game ${gameId}: Vote counts:`, voteCounts);
 
       // Find player with most votes
@@ -659,6 +647,53 @@ export class GameEngine {
       console.error(`Game ${gameId}: Error processing elimination:`, error);
       // Fallback to simple vote counting if API fails
       this.processEliminationFallback(gameId);
+    }
+  }
+
+  private async calculateVotes(
+    votes: string[]
+  ): Promise<{ [key: string]: number }> {
+    try {
+      const formattedVotes = votes.map((vote: string) => {
+        return { role: "user" as const, content: vote };
+      });
+
+      // Call OpenAI API for every vote. Use Promise.all to wait for all responses.
+      const completions = await Promise.all(
+        formattedVotes.map((vote) =>
+          this.openai.chat.completions.create({
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are a helpful assistant designed to output JSON. You should return an object with one key, 'name', which equals the name of the player being voted for.",
+              },
+              vote,
+            ],
+            model: "gpt-4o-mini",
+            response_format: { type: "json_object" },
+          })
+        )
+      );
+
+      const parsedVotes = completions.map((completion) => {
+        return completion.choices[0].message.content
+          ? JSON.parse(completion.choices[0].message.content)
+          : { name: "" };
+      });
+
+      // Count votes
+      const voteCounts: { [key: string]: number } = {};
+      parsedVotes.forEach((vote) => {
+        if (vote.name && vote.name.trim()) {
+          voteCounts[vote.name] = (voteCounts[vote.name] || 0) + 1;
+        }
+      });
+
+      return voteCounts;
+    } catch (error) {
+      console.error("Error calculating votes:", error);
+      throw error;
     }
   }
 

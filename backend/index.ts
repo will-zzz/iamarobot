@@ -195,54 +195,6 @@ app.post("/ai/vote", async (req: Request, res: Response) => {
   }
 });
 
-// Calculate votes. Godot calls this to calculate votes.
-// Passes vote strings (between 4 and 7)
-app.post("/calculate-votes", async (req: Request, res: Response) => {
-  try {
-    const rawVotes = req.body.votes;
-    const formattedVotes: ChatCompletionMessageParam[] = rawVotes.map(
-      (vote: string) => {
-        return { role: "user", content: vote };
-      }
-    );
-    // Call OpenAI API for every vote. Use Promise.all to wait for all responses.
-    const completions = await Promise.all(
-      formattedVotes.map((vote) =>
-        openai.chat.completions.create({
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are a helpful assistant designed to output JSON. You should return an object with one key, 'name', which equals the name of the player being voted for.",
-            },
-            vote,
-          ],
-          model: "gpt-4o-mini",
-          response_format: { type: "json_object" },
-        })
-      )
-    ).then((completions) => {
-      return completions.map((completion) => {
-        return completion.choices[0].message.content
-          ? JSON.parse(completion.choices[0].message.content)
-          : { name: "" };
-      });
-    });
-    // Count votes
-    const votes: { [key: string]: number } = {};
-    completions.forEach((vote) => {
-      if (votes[vote.name]) {
-        votes[vote.name]++;
-      } else {
-        votes[vote.name] = 1;
-      }
-    });
-    res.send(votes);
-  } catch (e) {
-    res.status(500).send(e);
-  }
-});
-
 // Get next speaker. Godot calls this to determine whose turn it is to speak.
 app.post("/next-speaker", async (req: Request, res: Response) => {
   try {
