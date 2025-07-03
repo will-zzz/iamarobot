@@ -180,7 +180,9 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
                       {item.playerName}
                     </div>
                     <div className="text-robot-light">
-                      {"message" in item ? item.message : item.vote}
+                      {"message" in item
+                        ? item.message
+                        : item.vote.split(": ")[1] || item.vote}
                     </div>
                   </div>
                 ))}
