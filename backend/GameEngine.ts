@@ -452,7 +452,18 @@ export class GameEngine {
       }
     }
 
-    // 2. If no name mentioned, don't assign a turn immediately
+    // 2. If no name mentioned, check if this is the start of a new round after elimination
+    // If the last message is a moderator elimination message, start with a random AI
+    if (lastMessage && lastMessage.includes("has been eliminated")) {
+      const aiPlayers = activePlayers.filter((p) => !p.isHuman);
+      if (aiPlayers.length > 0) {
+        const randomAI =
+          aiPlayers[Math.floor(Math.random() * aiPlayers.length)];
+        return randomAI;
+      }
+    }
+
+    // 3. If no name mentioned and not after elimination, don't assign a turn immediately
     // The turn will be assigned after 3 seconds or when human starts typing
     console.log(`   ⏳ No name mentioned, waiting for human input or timeout`);
     return null;
