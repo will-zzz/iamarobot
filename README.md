@@ -1,97 +1,76 @@
-# I Am A Robot - Monorepo
+# 🤖 iamarobot
 
-A monorepo containing both the backend and frontend for the "I Am A Robot" game.
+[![Demo](https://img.shields.io/badge/Demo-Try%20it%20out!-brightgreen?style=for-the-badge&logo=game-controller)](https://iamarobot.net)
 
-## Project Structure
+[![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)
+[![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
+[![Socket.io](https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=socket.io&logoColor=white)](https://socket.io/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Prisma](https://img.shields.io/badge/Prisma-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](https://www.prisma.io/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-412991?style=for-the-badge&logo=openai&logoColor=white)](https://openai.com/)
 
-- `backend/` - Express.js backend with OpenAI integration
-- `frontend/` - React frontend built with Vite and TypeScript
+<div align="center">
+  <img src="assets/images/demo.png" alt="I Am A Robot Game Demo" width="600" style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+</div>
 
-## Frontend Tech Stack
+## 🎮 About
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+**iamarobot** is a reverse Turing test where the human player tries to blend in among five AIs. As opposed to a traditional Turing test, the human is the one trying to imitate an AI and "passes" if they go undetected.
 
-## Development
+## 🚀 Quick Start
 
-### Backend Setup
+### Prerequisites
 
-```sh
-cd backend
-npm install
-npm run dev
-```
+- Node.js 18+ and npm
+- OpenAI API key
 
-### Frontend Setup
+### Installation
 
-```sh
-cd frontend
-npm install
-npm run dev
-```
+1. **Clone the repository**
 
-## How can I edit this code?
+   ```bash
+   git clone https://github.com/will-zzz/iamarobot.git
+   cd iamarobot
+   ```
 
-There are several ways of editing your application.
+2. **Install dependencies**
 
-**Use Lovable**
+   ```bash
+   # Backend
+   cd backend
+   npm install
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/da334d22-053f-4d11-b678-1c770b4cb1de) and start prompting.
+   # Frontend
+   cd ../frontend
+   npm install
+   ```
 
-Changes made via Lovable will be committed automatically to this repo.
+3. **Set up environment variables**
 
-**Use your preferred IDE**
+   ```bash
+   # In backend/.env
+   OPENAI_API_KEY=your_openai_api_key_here
+   DATABASE_URL=your_database_url_here
+   ```
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+4. **Start the development servers**
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+   ```bash
+   # Terminal 1
+   cd backend
+   npm run dev
 
-Follow these steps:
+   # Terminal 2
+   cd frontend
+   npm run dev
+   ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+5. **Open your browser**
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+   Navigate to `http://localhost:3000` and start playing!
 
-# Step 3: Install the necessary dependencies for both backend and frontend.
-cd backend && npm install
-cd ../frontend && npm install
+---
 
-# Step 4: Start the development servers.
-# Terminal 1 - Backend:
-cd backend && npm run dev
-
-# Terminal 2 - Frontend:
-cd frontend && npm run dev
-```
-
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/da334d22-053f-4d11-b678-1c770b4cb1de) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes it is!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+# **Play now at [iamarobot.net](https://iamarobot.net)!**
