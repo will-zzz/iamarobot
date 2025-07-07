@@ -36,6 +36,7 @@ interface GameState {
   speakingHistory: { [playerId: number]: number }; // playerId -> last turn number
   humanTimeoutId: NodeJS.Timeout | null;
   humanIsTyping: boolean;
+  isTimerPaused: boolean;
 }
 
 export class GameEngine {
@@ -307,6 +308,7 @@ export class GameEngine {
       speakingHistory: {},
       humanTimeoutId: null,
       humanIsTyping: false,
+      isTimerPaused: false,
     };
 
     this.games.set(gameId, gameState);
@@ -951,9 +953,25 @@ export class GameEngine {
     }
 
     game.turnTimer = setInterval(() => {
-      game.timeLeft--;
+      // Check if timer should be paused (when it's human's turn)
+      const currentPlayer = game.players.find((p) => p.id === game.currentTurn);
+      const shouldPause =
+        currentPlayer && currentPlayer.isHuman && game.gamePhase === "chat";
 
-      this.io.to(gameId).emit("time_update", { timeLeft: game.timeLeft });
+      if (shouldPause) {
+        game.isTimerPaused = true;
+        // Don't decrement time when paused
+        this.io
+          .to(gameId)
+          .emit("time_update", { timeLeft: game.timeLeft, isPaused: true });
+        return;
+      } else {
+        game.isTimerPaused = false;
+        game.timeLeft--;
+        this.io
+          .to(gameId)
+          .emit("time_update", { timeLeft: game.timeLeft, isPaused: false });
+      }
 
       if (game.timeLeft <= 0) {
         // Clear timer

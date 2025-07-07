@@ -17,7 +17,7 @@ export const prompts = {
 
   Remember to try to find out information from all other players. Try not to let a conversation between two contestants go on for too long.
   
-  Respond in 15 words or less.`,
+  Sound colloquial and avoid large words. Don't be Shakespeare. Respond in 15 words or less.`,
   // Voting Phase
   voting: (name: string, names: string) =>
     `You are ${name} the AI.

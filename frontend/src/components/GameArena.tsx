@@ -129,7 +129,10 @@ const GameArena: React.FC<GameArenaProps> = ({ gameId, playerName }) => {
             Round {gameState.roundNumber} -{" "}
             {gameState.gamePhase === "chat" ? "Chat Phase" : "Voting Phase"}
           </div>
-          <Timer initialSeconds={gameState.timeLeft} />
+          <Timer
+            initialSeconds={gameState.timeLeft}
+            isPaused={gameState.isTimerPaused || false}
+          />
         </div>
       </div>
 

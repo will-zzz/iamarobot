@@ -23,6 +23,7 @@ interface GameState {
     | "ended";
   timeLeft: number;
   roundNumber: number;
+  isTimerPaused?: boolean;
 }
 
 interface Message {
@@ -125,16 +126,20 @@ export const useGameSocket = ({ gameId, playerName }: UseGameSocketProps) => {
       );
     });
 
-    newSocket.on("time_update", (data: { timeLeft: number }) => {
-      setGameState((prev) =>
-        prev
-          ? {
-              ...prev,
-              timeLeft: data.timeLeft,
-            }
-          : null
-      );
-    });
+    newSocket.on(
+      "time_update",
+      (data: { timeLeft: number; isPaused?: boolean }) => {
+        setGameState((prev) =>
+          prev
+            ? {
+                ...prev,
+                timeLeft: data.timeLeft,
+                isTimerPaused: data.isPaused || false,
+              }
+            : null
+        );
+      }
+    );
 
     newSocket.on(
       "player_eliminated",
