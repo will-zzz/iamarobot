@@ -29,3 +29,10 @@ model Player {
   gameId       Int
   game         Game      @relation(fields: [gameId], references: [id])
 }
+
+model GameCounter {
+  id           Int       @id @default(autoincrement())
+  key          String    @unique
+  value        Int       @default(0)
+  updatedAt    DateTime  @updatedAt
+}

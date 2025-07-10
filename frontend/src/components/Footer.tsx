@@ -1,9 +1,36 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 
 const Footer: React.FC = () => {
+  const [gamesPlayed, setGamesPlayed] = useState<number>(0);
+
+  useEffect(() => {
+    const fetchGamesCounter = async () => {
+      try {
+        const response = await fetch(
+          `${import.meta.env.VITE_API_URL}/games-counter`
+        );
+        const data = await response.json();
+        setGamesPlayed(data.gamesPlayed);
+      } catch (error) {
+        console.error("Error fetching games counter:", error);
+      }
+    };
+
+    fetchGamesCounter();
+  }, []);
+
   return (
     <footer className="mt-auto py-4 relative flex justify-center items-center text-robot-muted text-xs">
       <p>© 2025 Will Zakielarz • Alpha 0.1.0</p>
+
+      {/* Games counter - bottom left */}
+      <div className="absolute left-0 pl-6">
+        <span className="text-green-400">
+          Games played: {gamesPlayed.toLocaleString()}
+        </span>
+      </div>
+
+      {/* Social links - bottom right */}
       <div className="absolute right-0 pr-6 flex gap-8">
         <a
           href="https://github.com/will-zzz/iamarobot"

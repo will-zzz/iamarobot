@@ -18,11 +18,6 @@ const server = createServer(app);
 
 app.use(express.json());
 
-// Root route - simple greeting
-app.get("/", (req: Request, res: Response) => {
-  res.send("Beep boop. I am a robot.");
-});
-
 // Allow requests from frontend domains
 app.use(
   cors({
@@ -37,6 +32,43 @@ app.use(
   })
 );
 
+// Root route - simple greeting
+app.get("/", (req: Request, res: Response) => {
+  res.send("Beep boop. I am a robot.");
+});
+
+// Get games counter
+app.get("/games-counter", async (req: Request, res: Response) => {
+  try {
+    const counter = await prisma.gameCounter.findUnique({
+      where: { key: "games_played" },
+    });
+    res.json({ gamesPlayed: counter?.value || 0 });
+  } catch (error) {
+    console.error("Error getting games counter:", error);
+    res.status(500).json({ gamesPlayed: 0 });
+  }
+});
+
+// Get games counter for shields.io badge
+app.get("/games-counter-badge", async (req: Request, res: Response) => {
+  try {
+    const counter = await prisma.gameCounter.findUnique({
+      where: { key: "games_played" },
+    });
+    const gamesPlayed = counter?.value || 0;
+
+    // Redirect to shields.io with the games count
+    const badgeUrl = `https://img.shields.io/badge/Games%20Played-${gamesPlayed}-brightgreen?style=for-the-badge&logo=game-controller`;
+    res.redirect(badgeUrl);
+  } catch (error) {
+    console.error("Error getting games counter badge:", error);
+    res.redirect(
+      "https://img.shields.io/badge/Games%20Played-0-brightgreen?style=for-the-badge&logo=game-controller"
+    );
+  }
+});
+
 const port = process.env.PORT;
 
 // Initialize GameEngine with Socket.IO
@@ -47,6 +79,18 @@ const gameEngine = new GameEngine(server, openai);
 app.post("/start-game", async (req, res) => {
   try {
     const result = await gameEngine.startGame(req.body.name);
+
+    // Increment games counter
+    try {
+      await prisma.gameCounter.upsert({
+        where: { key: "games_played" },
+        update: { value: { increment: 1 } },
+        create: { key: "games_played", value: 1 },
+      });
+    } catch (error) {
+      console.error("Error updating games counter:", error);
+    }
+
     res.status(201).json(result);
   } catch (error) {
     console.error("Error starting game:", error);
