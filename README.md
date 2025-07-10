@@ -1,7 +1,7 @@
 # 🤖 iamarobot
 
 [![Demo](https://img.shields.io/badge/Demo-Try%20it%20out!-brightgreen?style=for-the-badge&logo=game-controller)](https://iamarobot.net)
-[![Games Played](https://api.iamarobot.net/games-counter-badge)](https://iamarobot.net)
+[![Games Played](https://api.iamarobot.net/games-counter-badge?v=1)](https://iamarobot.net)
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)](https://reactjs.org/)

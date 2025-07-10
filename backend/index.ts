@@ -58,6 +58,13 @@ app.get("/games-counter-badge", async (req: Request, res: Response) => {
     });
     const gamesPlayed = counter?.value || 0;
 
+    // Add cache headers to prevent caching
+    res.set({
+      "Cache-Control": "no-cache, no-store, must-revalidate",
+      Pragma: "no-cache",
+      Expires: "0",
+    });
+
     // Redirect to shields.io with the games count
     const badgeUrl = `https://img.shields.io/badge/Games%20Played-${gamesPlayed}-brightgreen?style=for-the-badge&logo=game-controller`;
     res.redirect(badgeUrl);
