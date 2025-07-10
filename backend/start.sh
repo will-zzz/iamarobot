@@ -9,9 +9,9 @@ echo "🚀 Starting iamarobot backend..."
 echo "📦 Generating Prisma client..."
 npx prisma generate
 
-# Run database migrations
-echo "🗄️ Running database migrations..."
-npx prisma migrate deploy
+# Sync database schema
+echo "🗄️ Syncing database schema..."
+npx prisma db push
 
 # Start the application
 echo "🎮 Starting application..."
